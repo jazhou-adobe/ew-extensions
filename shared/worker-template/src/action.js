@@ -13,16 +13,35 @@ import { proxy as rawProxy, mapUpstream, fromUpstream } from './proxy.js';
 export const MAX_REQUEST_BODY = 512 * 1024;
 export const MAX_RESULT_BYTES = 950 * 1024;
 
+/**
+ * Route table: exact paths plus prefix routes (`GET /dam/*` matches every path below `/dam/`; the handler reads the
+ * remainder from `ctx.rest` and must validate it). Exact routes win over prefix routes; the longest prefix wins.
+ */
 function parseRoutes(routes) {
   const table = new Map();
+  const prefixes = new Map();
   Object.entries(routes).forEach(([key, handler]) => {
     const m = /^([A-Z]+) (\/\S*)$/.exec(key);
     if (!m || typeof handler !== 'function') throw new Error(`invalid route "${key}" (expected "METHOD /path")`);
-    const path = m[2].length > 1 ? m[2].replace(/\/+$/, '') : m[2];
-    if (!table.has(path)) table.set(path, new Map());
-    table.get(path).set(m[1], { handler, pattern: `${m[1]} ${path}` });
+    const wildcard = m[2].length > 2 && m[2].endsWith('/*');
+    const target = wildcard ? prefixes : table;
+    let path = m[2];
+    if (wildcard) path = path.slice(0, -1);
+    else if (path.length > 1) path = path.replace(/\/+$/, '');
+    if (!target.has(path)) target.set(path, new Map());
+    target.get(path).set(m[1], { handler, pattern: `${m[1]} ${path}${wildcard ? '*' : ''}` });
   });
-  return table;
+  const ordered = [...prefixes.keys()].sort((a, b) => b.length - a.length);
+  return {
+    table,
+    prefixes,
+    methods: [...new Set([...table.values(), ...prefixes.values()].flatMap((mm) => [...mm.keys()]))].sort(),
+    find(path) {
+      if (table.has(path)) return { byMethod: table.get(path) };
+      const prefix = ordered.find((p) => path.startsWith(p));
+      return prefix ? { byMethod: prefixes.get(prefix), rest: path.slice(prefix.length) } : undefined;
+    },
+  };
 }
 
 function isResponse(v) {
@@ -64,8 +83,7 @@ export function createAction({
   name, routes, secrets: declaredSecrets = [], authorize,
 }, deps = {}) {
   if (!name) throw new Error('createAction: name is required');
-  const table = parseRoutes(routes);
-  const methods = [...new Set([...table.values()].flatMap((m) => [...m.keys()]))].sort();
+  const { methods, find } = parseRoutes(routes);
   const {
     fetch: fetchImpl = (...a) => fetch(...a), sleep, random, now = Date.now,
     log: sink = defaultSink, env = process.env, jwksCooldownMs,
@@ -85,7 +103,7 @@ export function createAction({
       onMissing: (n) => logger('missing_secret', { name: n }),
     });
     const state = {
-      origin: undefined, allowed: false, route: 'unmatched', outcome: 'ok', userId: undefined, retries: 0,
+      origin: undefined, allowed: false, route: 'unmatched', outcome: 'ok', userId: undefined, retries: 0, extra: {},
     };
     let result;
 
@@ -131,9 +149,9 @@ export function createAction({
         if (request.rawBodyLength > MAX_REQUEST_BODY) throw new HttpError('payload_too_large');
 
         // (5) routing
-        const byMethod = table.get(request.path);
-        if (!byMethod) throw new HttpError('not_found');
-        const entry = byMethod.get(request.method);
+        const found = find(request.path);
+        if (!found) throw new HttpError('not_found');
+        const entry = found.byMethod.get(request.method);
         if (!entry) throw new HttpError('method_not_allowed');
         state.route = entry.pattern;
 
@@ -160,8 +178,18 @@ export function createAction({
           secret: secrets.secret,
           store: storeInstance,
           requestId,
+          rest: found.rest,
+          now,
           log: (event, fields) => logger(event, fields),
+          // Adds safe fields (ids, enums, counts; never user text) to the request's final log line.
+          annotate: (fields) => { Object.assign(state.extra, fields); },
           proxy: async (url, init, opts = {}) => {
+            if (opts.auth?.scheme === 'basic') {
+              // The composed Basic value is derived data: register it so it is redacted if an upstream echoes it.
+              const { usernameSecret, username = '' } = opts.auth;
+              const user = usernameSecret ? secrets.secret(usernameSecret) : username;
+              secrets.addSensitive(Buffer.from(`${user}:${secrets.secret(opts.auth.secret)}`).toString('base64'));
+            }
             const res = await rawProxy(url, init, opts, proxyDeps);
             return opts.mapErrors === false ? res : mapUpstream(res, opts, now);
           },
@@ -222,6 +250,7 @@ export function createAction({
       userId: state.userId,
       outcome: state.outcome,
       retries: state.retries,
+      ...state.extra,
       ...(state.outcome === 'forbidden_origin' ? { deniedOrigin: String(state.origin).slice(0, 200) } : {}),
     });
     return response;

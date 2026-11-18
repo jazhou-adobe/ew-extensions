@@ -18,8 +18,9 @@
     "test": "npm run test:unit && npm run test:scripts",
     "test:unit": "wtr",
     "test:scripts": "node --test \"scripts/*.test.mjs\"",
-    "test:worker": "node --test \"shared/worker-template/test/*.test.js\" \"apps/*/worker/test/*.test.js\"",
+    "test:worker": "node --test \"shared/worker-template/test/*.test.js\" \"apps/*/worker/test/*.test.js\" \"apps/*/providers/*/worker/test/*.test.js\"",
     "test:worker:deployed": "node --test \"shared/worker-template/test-live/*.test.js\"",
+    "test:picker:live": "node --test \"apps/multi-dam-picker/worker/test-live/*.test.js\" \"apps/multi-dam-picker/providers/*/worker/test-live/*.test.js\"",
     "test:e2e": "playwright test --project=chromium",
     "test:e2e:all": "playwright test",
     "prepare": "husky"

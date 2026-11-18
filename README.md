@@ -57,6 +57,7 @@ Rules:
 | --- | --- | --- | --- | --- |
 | Hello world | `apps/hello-world/` | `apps/hello-world/hello-world.html` | app | Fullscreen hello app that renders the SDK `context`. |
 | Hello plugin | `apps/hello-plugin/` | `apps/hello-plugin/hello-plugin.html` | library plugin | Library plugin with buttons that insert text and close the library. |
+| Multi-DAM Picker | `apps/multi-dam-picker/` | `apps/multi-dam-picker/multi-dam-picker.html` | library plugin | Browse, search and insert assets from a third-party DAM (Cloudinary first) through a credential-holding App Builder worker. |
 
 `type` is one of `app`, `library plugin`, `app + library plugin`.
 

@@ -1,0 +1,21 @@
+{
+  "asset_id": "5e8ff9bf55ba3508199d22e984129be6",
+  "public_id": "sample",
+  "asset_folder": "",
+  "display_name": "sample",
+  "filename": "sample",
+  "resource_type": "image",
+  "type": "upload",
+  "version": 1700000024,
+  "bytes": 50000,
+  "secure_url": "https://res.cloudinary.com/yifoe45l/image/upload/v1700000024/sample.jpg",
+  "created_at": "2026-11-10T09:15:00Z",
+  "uploaded_at": "2026-11-10T09:15:00Z",
+  "status": "active",
+  "format": "jpg",
+  "width": 1000,
+  "height": 667,
+  "context": {
+    "alt": "Sample"
+  }
+}

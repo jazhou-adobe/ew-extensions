@@ -1,0 +1,44 @@
+# App Builder application root for the multi-dam-picker extension's backend (one raw web action).
+# Secrets are `$NAME` references filled from the untracked .env at deploy time; everything else is a reviewable literal.
+application:
+  hooks:
+    pre-app-deploy: node ../../../shared/worker-template/scripts/pre-deploy-guard.mjs
+  runtimeManifest:
+    packages:
+      multi-dam-picker:
+        license: Apache-2.0
+        actions:
+          api:
+            function: actions/api/index.js
+            web: raw
+            runtime: nodejs:22
+            inputs:
+              ORG: jazhou-adobe
+              SITE: ew-extensions
+              IMS_ORIGIN: https://ims-na1.adobelogin.com
+              ALLOWED_IMS_CLIENT_IDS: ''
+              STATE_REGION: amer
+              ALLOWED_LOCAL_ORIGINS: $ALLOWED_LOCAL_ORIGINS
+              # Cloudinary provider. Environment-specific values come from .env; the two credentials are secrets.
+              CLOUDINARY_CLOUD_NAME: $CLOUDINARY_CLOUD_NAME
+              CLOUDINARY_ROOT_FOLDER: $CLOUDINARY_ROOT_FOLDER
+              CLOUDINARY_FOLDER_MODE: $CLOUDINARY_FOLDER_MODE
+              CLOUDINARY_SIGN_URLS: $CLOUDINARY_SIGN_URLS
+              CLOUDINARY_API_KEY: $CLOUDINARY_API_KEY
+              CLOUDINARY_API_SECRET: $CLOUDINARY_API_SECRET
+              # Reviewable defaults (change here and redeploy).
+              CLOUDINARY_API_HOST: api.cloudinary.com
+              CLOUDINARY_SIGNATURE_ALGORITHM: sha1
+              CLOUDINARY_ALT_CONTEXT_FIELD: alt
+              CLOUDINARY_CAPTION_CONTEXT_FIELD: caption
+              CLOUDINARY_ALT_METADATA_FIELD: ''
+              CLOUDINARY_RENDITIONS: ''
+              CLOUDINARY_DELIVERY_HOSTS: ''
+              CLOUDINARY_CACHE_SECONDS: '30'
+            annotations:
+              web-custom-options: true
+              require-adobe-auth: false
+              final: true
+            limits:
+              timeout: 25000
+              memory: 256

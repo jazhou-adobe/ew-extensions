@@ -124,6 +124,162 @@ function checkWorkers(root, errors) {
   });
 }
 
+// ---- provider-based extensions (SPEC multi-dam-picker, RC1-RC7) ----
+
+const TEXT_FILE = /\.(?:m?js|cjs|css|html|json|ya?ml)$/;
+const BASE_INPUTS = new Set([
+  'ORG', 'SITE', 'IMS_ORIGIN', 'ALLOWED_IMS_CLIENT_IDS', 'STATE_REGION', 'ALLOWED_LOCAL_ORIGINS',
+]);
+const BROWSER_API = /\b(?:document|window|localStorage|sessionStorage)\.[A-Za-z_]/;
+const README_SECTIONS = [
+  ['setup', /^#+\s.*\bsetup\b/im],
+  ['vendor-side setup', /^#+\s.*-side setup/im],
+  ['`library` rows', /^#+\s.*`library` sheet row/im],
+  ['site config read', /^#+\s.*site config/im],
+  ['local dev', /^#+\s.*local dev/im],
+  ['deploy and rotation', /^#+\s.*deploy/im],
+  ['shared-credential model', /^#+\s.*shared[- ]credential/im],
+  ['limits', /^#+\s.*\blimits\b/im],
+  ['privacy', /^#+\s.*\bprivacy\b/im],
+  ['add-a-provider checklist', /^#+\s.*add a provider/im],
+];
+
+const rel = (root, file) => relative(root, file).split('\\').join('/');
+const parts = (path) => path.split('/');
+
+/** Vendors of an extension: every `providers/<vendor>/` folder that has code (not just a SPEC.md). */
+function vendorsOf(extDir) {
+  const dir = join(extDir, 'providers');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).filter((v) => statSync(join(dir, v)).isDirectory() && !isPlanned(join(dir, v)));
+}
+
+const NON_SHIPPED_DIRS = ['test', 'test-live', 'fixtures', 'dist', 'node_modules'];
+const isTestPath = (path) => parts(path).some((p) => NON_SHIPPED_DIRS.includes(p));
+
+/** README `library` rows: `| title | path | format | ref | icon | experience |`, as `{ path, ref }`. */
+function libraryRows(readme) {
+  const section = readme.split(/^#+\s.*`library` sheet row.*$/im)[1];
+  if (!section) return [];
+  const body = section.split(/^#+\s/m)[0];
+  return body.split('\n')
+    .filter((l) => l.trim().startsWith('|') && /\.html/.test(l))
+    .map((l) => l.split('|').slice(1, -1).map((c) => c.trim().replace(/`/g, '')))
+    .map((cells) => ({ path: cells[1], ref: cells[3] || '' }));
+}
+
+function checkProviderExtension(root, ext, errors) {
+  const extDir = join(root, 'apps', ext);
+  const vendors = vendorsOf(extDir);
+  if (!vendors.length) return;
+  const where = `apps/${ext}`;
+  const names = (v) => new RegExp(v, 'i');
+
+  // RC1: no vendor strings outside providers/<vendor>/, tests, fixtures, docs, the registry line and config
+  walkRepo(extDir).forEach((file) => {
+    const path = rel(extDir, file);
+    if (!TEXT_FILE.test(path) && path !== 'worker/.env.example') return;
+    if (path.startsWith('providers/') || isTestPath(path)) return;
+    if (['worker/app.config.yaml', 'worker/.env.example', 'worker/providers.js'].includes(path)) return;
+    const text = readFileSync(file, 'utf8');
+    vendors.filter((v) => names(v).test(text)).forEach((v) => {
+      errors.push(`${where}/${path}: mentions the vendor "${v}" outside providers/${v}/ `
+        + '(vendor code must stay in its provider folder)');
+    });
+  });
+
+  vendors.forEach((v) => {
+    const dir = join(extDir, 'providers', v);
+    const here = `${where}/providers/${v}`;
+    // RC2: worker module, fixtures with a recording README, conformance registration, README section
+    if (!existsSync(join(dir, 'worker', 'index.js'))) {
+      errors.push(`${here}: missing worker/index.js (the provider module)`);
+    }
+    if (!existsSync(join(dir, 'worker', 'fixtures', 'README.md'))) {
+      errors.push(`${here}: missing worker/fixtures/README.md (recording notes)`);
+    }
+    const registry = join(extDir, 'worker', 'providers.js');
+    if (!existsSync(registry) || !readFileSync(registry, 'utf8').includes(`providers/${v}/`)) {
+      errors.push(`${where}/worker/providers.js: provider "${v}" is not registered`);
+    }
+    const testDir = join(extDir, 'worker', 'test');
+    const covered = existsSync(testDir) && walkRepo(testDir).some((f) => /\.test\.js$/.test(f)
+      && readFileSync(f, 'utf8').includes(`providers/${v}/`));
+    if (!covered) errors.push(`${where}/worker/test: no conformance test registers provider "${v}"`);
+    const readme = existsSync(join(extDir, 'README.md')) ? readFileSync(join(extDir, 'README.md'), 'utf8') : '';
+    if (!new RegExp(`^#+\\s.*${v}`, 'im').test(readme)) {
+      errors.push(`${where}/README.md: missing a section for provider "${v}"`);
+    }
+
+    // RC6: a provider is a module of the extension's worker, not a second app
+    walkRepo(dir).forEach((file) => {
+      const path = rel(dir, file);
+      const name = path.split('/').pop();
+      if (name === 'package.json' || CONFIG_NAMES.has(name)) {
+        errors.push(`${here}/${path}: a provider has no package.json or app config of its own`);
+      }
+      if (/\.(html|css)$/.test(name)) errors.push(`${here}/${path}: browser code does not belong in a provider`);
+      if (/\.m?js$/.test(name) && BROWSER_API.test(readFileSync(file, 'utf8'))) {
+        errors.push(`${here}/${path}: browser code does not belong in a provider`);
+      }
+    });
+  });
+
+  // RC5: README sections and documented inputs match the app config
+  const readme = existsSync(join(extDir, 'README.md')) ? readFileSync(join(extDir, 'README.md'), 'utf8') : '';
+  README_SECTIONS.forEach(([name, re]) => {
+    if (!re.test(readme)) errors.push(`${where}/README.md: missing required section "${name}"`);
+  });
+  const configPath = join(extDir, 'worker', 'app.config.yaml');
+  if (existsSync(configPath)) {
+    const { inputs } = analyzeConfig(readFileSync(configPath, 'utf8'), { folderName: ext });
+    const declared = new Set(inputs.map((i) => i.name).filter((n) => !BASE_INPUTS.has(n)));
+    declared.forEach((n) => {
+      if (!readme.includes(n)) errors.push(`${where}/README.md: does not document the input ${n}`);
+    });
+    vendors.forEach((v) => {
+      const prefix = `${v.toUpperCase().replace(/-/g, '_')}_`;
+      new Set(readme.match(new RegExp(`\\b${prefix}[A-Z0-9_]+\\b`, 'g')) || []).forEach((n) => {
+        if (!declared.has(n)) errors.push(`${where}/README.md: documents ${n}, which the app config does not declare`);
+      });
+    });
+  }
+
+  // RC7: library rows are absolute code-site URLs, never a demo-site host; local and branch rows above main
+  const rows = libraryRows(readme);
+  if (!rows.length) errors.push(`${where}/README.md: no \`library\` rows listed`);
+  rows.forEach((r) => {
+    if (!/^https?:\/\//.test(r.path)) {
+      errors.push(`${where}/README.md: library row path must be an absolute URL (got "${r.path}")`);
+    }
+    if (/ew-extensions-demo/.test(r.path)) {
+      errors.push(`${where}/README.md: library row path must not use the demo site host (got "${r.path}")`);
+    }
+  });
+  const mainAt = rows.findIndex((r) => r.ref === '' || r.ref === 'main');
+  if (mainAt >= 0 && rows.slice(mainAt + 1).some((r) => r.ref !== '' && r.ref !== 'main')) {
+    errors.push(`${where}/README.md: library rows for local and branch refs must be listed above the main row`);
+  }
+}
+
+/** RC1 for the shared core: the template's source, scaffold, scripts and test kit know no vendor. */
+function checkCoreIsVendorFree(root, errors) {
+  const appsDir = join(root, 'apps');
+  if (!existsSync(appsDir)) return;
+  const vendors = [...new Set(readdirSync(appsDir).flatMap((e) => vendorsOf(join(appsDir, e))))];
+  if (!vendors.length) return;
+  ['src', 'scaffold', 'scripts', 'test-kit'].forEach((dir) => {
+    const base = join(root, 'shared', 'worker-template', dir);
+    if (!existsSync(base)) return;
+    walkRepo(base).filter((f) => TEXT_FILE.test(f)).forEach((file) => {
+      const text = readFileSync(file, 'utf8');
+      vendors.filter((v) => new RegExp(v, 'i').test(text)).forEach((v) => {
+        errors.push(`${rel(root, file)}: the shared template must not mention the vendor "${v}"`);
+      });
+    });
+  });
+}
+
 export function checkConventions(root) {
   const errors = [];
   const readmePath = join(root, 'README.md');
@@ -174,6 +330,8 @@ export function checkConventions(root) {
   });
 
   checkWorkers(root, errors);
+  folders.forEach((name) => checkProviderExtension(root, name, errors));
+  checkCoreIsVendorFree(root, errors);
   return errors;
 }
 

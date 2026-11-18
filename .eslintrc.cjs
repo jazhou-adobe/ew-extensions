@@ -25,7 +25,11 @@ module.exports = {
     },
     {
       // Worker code runs in Node (App Builder / I/O Runtime), not the browser.
-      files: ['shared/worker-template/**/*.{js,mjs}', 'apps/*/worker/**/*.{js,mjs}'],
+      files: [
+        'shared/worker-template/**/*.{js,mjs}',
+        'apps/*/worker/**/*.{js,mjs}',
+        'apps/*/providers/*/worker/**/*.{js,mjs}',
+      ],
       env: { node: true, browser: false },
       rules: {
         'import/no-extraneous-dependencies': 'off',
@@ -44,6 +48,10 @@ module.exports = {
         'shared/worker-template/test/**/*.js',
         'shared/worker-template/test-live/**/*.js',
         'apps/*/worker/test/**/*.js',
+        'apps/*/providers/*/worker/test/**/*.js',
+        'apps/*/worker/test-live/**/*.js',
+        'apps/*/providers/*/worker/test-live/**/*.js',
+        'apps/multi-dam-picker/test/**/*.js',
         'apps/*/test/**/*-worker.*.js',
         'scripts/*.test.mjs',
       ],
@@ -56,6 +64,10 @@ module.exports = {
         'object-property-newline': 'off',
         'default-param-last': 'off',
         'no-underscore-dangle': 'off',
+        camelcase: 'off',
+        'no-script-url': 'off',
+        'no-bitwise': 'off',
+        'operator-assignment': 'off',
       },
     },
     {

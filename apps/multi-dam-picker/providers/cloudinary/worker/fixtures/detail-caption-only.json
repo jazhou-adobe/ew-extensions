@@ -1,0 +1,22 @@
+{
+  "asset_id": "86e983b6d43872c8f496c9aa9008147e",
+  "public_id": "samples/animals/kitten-playing",
+  "asset_folder": "samples/animals",
+  "display_name": "kitten-playing",
+  "filename": "kitten-playing",
+  "resource_type": "image",
+  "type": "upload",
+  "version": 1700000012,
+  "bytes": 345678,
+  "secure_url": "https://res.cloudinary.com/yifoe45l/image/upload/v1700000012/samples/animals/kitten-playing.gif",
+  "created_at": "2026-11-10T09:15:00Z",
+  "uploaded_at": "2026-11-10T09:15:00Z",
+  "status": "active",
+  "format": "gif",
+  "width": 800,
+  "height": 600,
+  "context": {
+    "caption": "Kitten playing with a ball"
+  },
+  "tags": []
+}

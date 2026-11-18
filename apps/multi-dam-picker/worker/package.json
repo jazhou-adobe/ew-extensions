@@ -1,0 +1,8 @@
+{
+  "name": "multi-dam-picker-worker",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Backend (Adobe App Builder web action) for the multi-dam-picker extension.",
+  "type": "module",
+  "license": "Apache-2.0"
+}

@@ -9,14 +9,17 @@ import { makeInputs, makeParams } from './make-params.js';
  * a fixed clock and instant sleeps.
  * `call(request)` builds raw params and invokes `main`; a valid token is added unless `token: null`.
  *
+ * `vendor` replaces the scripted `upstream` with any double that has a `fetch(url, init)`.
+ *
  * @param {{ name?: string, routes: object, secrets?: string[], authorize?: Function,
- *           inputs?: object, upstream?: Array, deps?: object, now?: number }} options
+ *           inputs?: object, upstream?: Array, vendor?: { fetch: Function }, deps?: object, now?: number }} options
  */
 export async function makeWorld({
-  name = 'test-worker', routes, secrets = [], authorize, inputs, upstream, deps = {}, now = Date.now(),
+  name = 'test-worker', routes, secrets = [], authorize, inputs, upstream, vendor: vendorDouble, deps = {},
+  now = Date.now(),
 }) {
   const ims = await fakeIms();
-  const vendor = fakeUpstream(upstream);
+  const vendor = vendorDouble ?? fakeUpstream(upstream);
   const logs = [];
   const sleeps = [];
   const clock = { now };

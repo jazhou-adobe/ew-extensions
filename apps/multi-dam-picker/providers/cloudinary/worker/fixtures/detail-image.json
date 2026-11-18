@@ -1,0 +1,59 @@
+{
+  "asset_id": "11c7353ab0f22ba7e25162213d11b108",
+  "public_id": "samples/landscapes/beach-boat",
+  "asset_folder": "samples/landscapes",
+  "display_name": "beach-boat",
+  "filename": "beach-boat",
+  "resource_type": "image",
+  "type": "upload",
+  "version": 1700000011,
+  "bytes": 1233456,
+  "secure_url": "https://res.cloudinary.com/yifoe45l/image/upload/v1700000011/samples/landscapes/beach-boat.jpg",
+  "created_at": "2026-11-10T09:15:00Z",
+  "uploaded_at": "2026-11-10T09:15:00Z",
+  "status": "active",
+  "format": "jpg",
+  "width": 2000,
+  "height": 1333,
+  "context": {
+    "custom": {
+      "alt": "A small boat on a sandy beach",
+      "caption": "Beach with boat"
+    }
+  },
+  "tags": [
+    "beach",
+    "boat"
+  ],
+  "metadata": {},
+  "derived": [
+    {
+      "transformation": "c_limit,w_300",
+      "format": "jpg",
+      "bytes": 9000,
+      "id": "dddddddddddddddddddddddddddddddd",
+      "url": "http://res.cloudinary.com/x",
+      "secure_url": "https://res.cloudinary.com/x"
+    },
+    {
+      "transformation": "c_limit,w_300",
+      "format": "jpg",
+      "bytes": 9000,
+      "id": "dddddddddddddddddddddddddddddddd",
+      "url": "http://res.cloudinary.com/x",
+      "secure_url": "https://res.cloudinary.com/x"
+    },
+    {
+      "transformation": "c_limit,w_300",
+      "format": "jpg",
+      "bytes": 9000,
+      "id": "dddddddddddddddddddddddddddddddd",
+      "url": "http://res.cloudinary.com/x",
+      "secure_url": "https://res.cloudinary.com/x"
+    }
+  ],
+  "etag": "abc",
+  "last_updated": {
+    "access_control_updated_at": "2026-11-10T09:15:00Z"
+  }
+}

@@ -25,7 +25,10 @@ export function createSecrets(params, declared, { onMissing } = {}) {
   });
   const config = {};
   inputNames.forEach((n) => {
-    if (!names.has(n) && typeof params[n] === 'string') config[n] = params[n];
+    if (names.has(n)) return;
+    // Numbers and booleans (YAML literals in the app config) reach the action as native values: expose them as text.
+    if (typeof params[n] === 'string') config[n] = params[n];
+    else if (typeof params[n] === 'number' || typeof params[n] === 'boolean') config[n] = String(params[n]);
   });
   Object.freeze(config);
 

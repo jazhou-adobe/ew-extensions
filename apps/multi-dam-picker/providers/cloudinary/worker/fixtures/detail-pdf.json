@@ -1,0 +1,22 @@
+{
+  "asset_id": "bacad580f09fe53403770d8f4d6e4ae8",
+  "public_id": "samples/docs/annual report 2025",
+  "asset_folder": "samples/docs",
+  "display_name": "annual report 2025",
+  "filename": "annual report 2025",
+  "resource_type": "image",
+  "type": "upload",
+  "version": 1700000015,
+  "bytes": 456789,
+  "secure_url": "https://res.cloudinary.com/yifoe45l/image/upload/v1700000015/samples/docs/annual%20report%202025.pdf",
+  "created_at": "2026-11-10T09:15:00Z",
+  "uploaded_at": "2026-11-10T09:15:00Z",
+  "status": "active",
+  "format": "pdf",
+  "width": 612,
+  "height": 792,
+  "context": {},
+  "tags": [
+    "report"
+  ]
+}
