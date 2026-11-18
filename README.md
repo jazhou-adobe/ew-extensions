@@ -79,7 +79,8 @@ First `npx playwright install chromium`. A husky pre-commit hook runs lint-stage
 ### Open an extension in EW
 
 - Standalone: `http://localhost:3000/apps/hello-world/hello-world.html` shows "not running inside Experience Workspace".
-- App, `ref=local`: `https://da.live/app/jazhou-adobe/ew-extensions/apps/hello-world/hello-world?ref=local`
+- App, `ref=local`: `https://da.live/app/jazhou-adobe/ew-extensions/apps/hello-world/hello-world?ref=local` (the
+  `da.live/app/{org}/{repo}` path names the *code* repo, not the content site)
 - App, branch: same URL with `?ref=<branch>` (use branch names without `/`; push first and wait for Code Sync).
 - Library plugin: open a document in the EW editor with `?ref=local` (or `?ref=<branch>`), open the library, pick the plugin.
   It needs a row in the site's `library` config tab.
@@ -94,23 +95,28 @@ version" note. Apps act with the signed-in user's rights, so only accept it for 
 
 ### Registering extensions
 
-Edit the site config at `https://da.live/config#/jazhou-adobe/ew-extensions/` (requires config permission):
+The DA test site is `https://da.live/#/jazhou-adobe/ew-extensions-demo` (code repo `jazhou-adobe/ew-extensions-demo`).
+Extension code stays in this repo, so the demo site's config rows use **absolute** URLs on this repo's code site
+(`https://main--ew-extensions--jazhou-adobe.aem.live/...`); a path starting with `/` would resolve against the demo
+site's own code. Edit `https://da.live/config#/jazhou-adobe/ew-extensions-demo/` (requires config permission):
 
 - `apps` sheet (columns `title`, `description`, `image`, `path`, `ref`) for fullscreen apps. The card shows at
-  `https://da.live/apps#/jazhou-adobe/ew-extensions`.
+  `https://da.live/apps#/jazhou-adobe/ew-extensions-demo`.
 - `library` tab (columns `title`, `path`, `format`, `ref`, `icon`, `experience`) for library plugins; `path` is the
-  entry page, e.g. `/apps/hello-plugin/hello-plugin.html`. Avoid the reserved titles `blocks`, `templates`, `icons`,
-  `placeholders`, `aem-assets*`.
+  absolute entry page URL. Avoid the reserved titles `blocks`, `templates`, `icons`, `placeholders`, `aem-assets*`.
+- [ASSUMPTION] an absolute library `path` is not rewritten to `localhost:3000` by `?ref=local`; for local plugin work,
+  add a second row pointing at `http://localhost:3000/...` or test on a branch.
 
 The exact rows are in each extension's README.
 
 ## Hosting prerequisites (owner actions)
 
 Install the [AEM Code Sync](https://www.aem.live/docs/ew/developing/micro-frontends/1-create-your-project) GitHub app on
-this repo, register the site in the Configuration Service, and confirm the DA org/site `jazhou-adobe/ew-extensions`
-exists with config access. Until then `https://main--ew-extensions--jazhou-adobe.aem.live/...` returns 404.
+this repo and register the site in the Configuration Service. Until then
+`https://main--ew-extensions--jazhou-adobe.aem.live/...` returns 404. The DA test site `jazhou-adobe/ew-extensions-demo`
+already exists.
 
-## Worker notes (ticket #2)
+## Worker notes (ticket #2, Adobe App Builder)
 
 Per-extension backend workers go in `apps/<name>/worker/`, built from `shared/worker-template/`. Workers must validate the
 IMS token and set CORS; secrets live in the platform store, never in the repo.

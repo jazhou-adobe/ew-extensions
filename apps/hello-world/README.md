@@ -10,7 +10,7 @@ Files: `hello-world.html` (entry), `hello-world.js` (bootstrap), `hello-world-re
 
 ### `apps` sheet row
 
-In `https://da.live/config#/jazhou-adobe/ew-extensions/`, `apps` sheet:
+In `https://da.live/config#/jazhou-adobe/ew-extensions-demo/` (the DA test site), `apps` sheet:
 
 | title | description | image | path | ref |
 | --- | --- | --- | --- | --- |

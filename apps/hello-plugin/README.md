@@ -14,14 +14,15 @@ Files: `hello-plugin.html` (entry), `hello-plugin.js` (bootstrap), `hello-plugin
 
 ### `library` sheet row
 
-In `https://da.live/config#/jazhou-adobe/ew-extensions/`, `library` tab:
+In `https://da.live/config#/jazhou-adobe/ew-extensions-demo/` (the DA test site), `library` tab:
 
 | title | path | format | ref | icon | experience |
 | --- | --- | --- | --- | --- | --- |
-| Hello plugin | /apps/hello-plugin/hello-plugin.html | | | | inline |
+| Hello plugin | https://main--ew-extensions--jazhou-adobe.aem.live/apps/hello-plugin/hello-plugin.html | | | | inline |
+| Hello plugin (local) | http://localhost:3000/apps/hello-plugin/hello-plugin.html | | | | inline |
 
-Leave `ref` blank so the plugin shows for `main`, branch refs and `ref=local`. A path starting with `/` resolves to
-`http://localhost:3000` when the editor URL has `?ref=local`, else to `https://{branch}--ew-extensions--jazhou-adobe.aem.live`.
+The code lives in this repo, not the demo site's repo, so paths are absolute. Use the `(local)` row with `npm start`;
+for a branch, replace `main--` with `{branch}--`.
 
 ## Local dev
 
