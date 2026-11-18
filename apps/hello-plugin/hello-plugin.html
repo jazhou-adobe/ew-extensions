@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Hello plugin</title>
+    <!-- Load the SDK early so its postMessage listener is registered before EW sends the init message. -->
+    <script src="https://da.live/nx/utils/sdk.js" type="module"></script>
+    <script src="/apps/hello-plugin/hello-plugin.js" type="module"></script>
+    <link rel="stylesheet" href="/apps/hello-plugin/hello-plugin.css">
+  </head>
+  <body>
+    <main id="app"></main>
+  </body>
+</html>

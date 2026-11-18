@@ -1,0 +1,35 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 24px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 24px;
+}
+
+h2 {
+  margin: 24px 0 8px;
+  font-size: 16px;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+dt {
+  font-weight: 600;
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

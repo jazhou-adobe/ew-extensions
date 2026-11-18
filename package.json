@@ -1,0 +1,42 @@
+{
+  "name": "ew-extensions",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Experience Workspace (EW) extensions: one self-contained folder per extension under apps/.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "aem up --no-open --port 3000",
+    "serve": "node scripts/static-server.mjs",
+    "lint": "npm run lint:js && npm run lint:css",
+    "lint:js": "eslint .",
+    "lint:css": "stylelint \"apps/**/*.css\"",
+    "check": "node scripts/check-conventions.mjs",
+    "test": "npm run test:unit && npm run test:scripts",
+    "test:unit": "wtr",
+    "test:scripts": "node --test \"scripts/*.test.mjs\"",
+    "test:e2e": "playwright test --project=chromium",
+    "test:e2e:all": "playwright test",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,cjs,mjs}": "eslint --fix",
+    "*.css": "stylelint --fix"
+  },
+  "devDependencies": {
+    "@adobe/aem-cli": "^16.22.22",
+    "@adobe/eslint-config-helix": "^2.0.9",
+    "@esm-bundle/chai": "^4.3.4-fix.0",
+    "@playwright/test": "^1.65.1",
+    "@web/test-runner": "^0.20.2",
+    "@web/test-runner-playwright": "^1.0.2",
+    "eslint": "^8.57.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.1",
+    "stylelint": "^16.26.1",
+    "stylelint-config-standard": "^38.0.0"
+  }
+}
