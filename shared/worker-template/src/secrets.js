@@ -42,6 +42,13 @@ export function createSecrets(params, declared, { onMissing } = {}) {
     return value;
   };
 
+  const optionalSecret = (name) => {
+    const value = params[name];
+    if (typeof value !== 'string' || !value) return undefined;
+    values.add(value);
+    return value;
+  };
+
   const forms = () => [...values].flatMap((v) => {
     const json = JSON.stringify(v).slice(1, -1);
     return json === v ? [v] : [v, json];
@@ -52,6 +59,7 @@ export function createSecrets(params, declared, { onMissing } = {}) {
   return {
     config,
     secret,
+    optionalSecret,
     redact,
     redactValue,
     addSensitive: (value) => { if (value) values.add(value); },

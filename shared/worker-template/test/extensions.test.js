@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeWorld, canary } from '../test-kit/index.js';
+import { HttpError } from '../src/index.js';
 
 const SECRET_KEY = canary('key');
 const SECRET_PW = canary('pw');
@@ -65,4 +66,68 @@ test('numeric and boolean literal inputs reach ctx.config as text', async () => 
   const { config } = (await w.call({ path: '/cfg' })).json();
   assert.equal(config.N, '30');
   assert.equal(config.B, 'true');
+});
+
+test('putIf writes only when the key is absent (locks) or present (no resurrection); memory twin honours TTL', async () => {
+  const { memoryStore } = await import('../src/store.js');
+  const clock = { now: 1000 };
+  const store = memoryStore({ workerName: 'w', now: () => clock.now });
+  assert.equal(await store.putIf('lock', 'a', { when: 'absent', ttlSeconds: 20 }), true);
+  assert.equal(await store.putIf('lock', 'b', { when: 'absent', ttlSeconds: 20 }), false);
+  assert.equal(await store.get('lock'), 'a');
+  clock.now += 21_000;
+  assert.equal(await store.putIf('lock', 'b', { when: 'absent', ttlSeconds: 20 }), true);
+  assert.equal(await store.putIf('missing', 1, { when: 'present' }), false);
+  assert.equal(await store.get('missing'), undefined);
+  await store.put('rec', 1);
+  assert.equal(await store.putIf('rec', 2, { when: 'present' }), true);
+  assert.equal(await store.get('rec'), 2);
+  await assert.rejects(store.putIf('rec', 3, {}), /when/);
+});
+
+test('mode public: no IMS token, no origin gate, no CORS headers; handlers get no identity; secrets stay redacted', async () => {
+  const world = await makeWorld({
+    routes: {
+      'GET /x/*': async ({
+        identity, rest, addSensitive, optionalSecret, secret,
+      }) => {
+        addSensitive('runtime-value-123');
+        return {
+          statusCode: 200,
+          headers: { 'content-type': 'text/html', 'set-cookie': 'a=b; HttpOnly', 'access-control-allow-origin': '*' },
+          body: `<p>${rest} ${identity === undefined} ${optionalSecret('NOPE')} ${secret('V_KEY')} runtime-value-123</p>`,
+        };
+      },
+    },
+    secrets: ['V_KEY'],
+    inputs: { V_KEY: SECRET_KEY },
+    mode: 'public',
+  });
+  const res = await world.call({ path: '/x/y', token: null, origin: 'https://evil.example' });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['set-cookie'], 'a=b; HttpOnly');
+  assert.equal(res.headers['content-type'], 'text/html');
+  assert.equal(res.headers['access-control-allow-origin'], undefined);
+  assert.ok(res.body.includes('y true undefined [redacted] [redacted]'), res.body);
+  assert.equal((await world.call({ path: '/nope', token: null })).statusCode, 404);
+  assert.equal((await world.call({ path: '/x/y', token: null, method: 'POST' })).statusCode, 405);
+  assert.equal((await world.call({ path: '/x/y', token: null, method: 'OPTIONS' })).statusCode, 405);
+});
+
+test('a per-call bearer token is sent and redacted; the new 409 provider error codes exist', async () => {
+  const w = await make({ routes: {
+    'GET /tok': async ({ proxy }) => {
+      const res = await proxy('https://api.test/x', {}, { allowedHosts: ['api.test'], auth: { scheme: 'bearer', token: 'user-token-abc' } });
+      return { echoed: res.text() };
+    },
+    'GET /nc': async () => { throw new HttpError('provider_not_connected'); },
+    'GET /ra': async () => { throw new HttpError('provider_reauth_required'); },
+  }, upstream: [{ status: 200, body: 'echo user-token-abc' }] });
+  const res = await w.call({ path: '/tok' });
+  assert.ok(!res.body.includes('user-token-abc'));
+  assert.equal(w.vendor.requests[0].headers.authorization, 'Bearer user-token-abc');
+  const nc = await w.call({ path: '/nc' });
+  assert.deepEqual([nc.statusCode, nc.json().error.code], [409, 'provider_not_connected']);
+  const ra = await w.call({ path: '/ra' });
+  assert.deepEqual([ra.statusCode, ra.json().error.code], [409, 'provider_reauth_required']);
 });

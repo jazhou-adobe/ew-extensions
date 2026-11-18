@@ -5,14 +5,14 @@
 export const ASSET_TYPES = ['image', 'video', 'document', 'audio'];
 export const OUTPUT_TYPES = [...ASSET_TYPES, 'other'];
 export const CREDENTIAL_KINDS = ['service', 'user-oauth'];
-/** The credential kinds this build hosts. #25 adds `user-oauth` together with its OAuth routes and token store. */
-export const HOSTED_KINDS = Object.freeze(['service']);
+/** The credential kinds this build hosts: `service` (one key held by the worker) and `user-oauth` (per author). */
+export const HOSTED_KINDS = Object.freeze(['service', 'user-oauth']);
 export const PAGE_SIZE_DEFAULT = 24;
 export const PAGE_SIZE_MAX = 50;
 export const MAX_QUERY_LENGTH = 200;
 export const CACHE_MAX_BYTES = 64 * 1024;
 
-/** Failure classes a provider reports (SPEC D3). The last two are reserved for `user-oauth` and never emitted yet. */
+/** Failure classes a provider reports (SPEC D3). `reauth_required` and `not_connected` belong to `user-oauth`. */
 export const FAILURE_KINDS = [
   'bad_request', 'not_found', 'forbidden', 'rate_limited', 'misconfigured', 'upstream_unavailable',
   'reauth_required', 'not_connected',
@@ -74,12 +74,18 @@ export function validateProvider(p) {
   requireMember(p, 'config', (v) => typeof v === 'object' && isStringList(v.required) && isStringList(v.secrets)
     && isFn(v.resolve));
   if (p.credentialKind === 'user-oauth') {
-    requireMember(p, 'scopes', isStringList);
+    requireMember(p, 'scopes', (v) => isStringList(v) && v.length > 0);
     ['buildAuthorizeUrl', 'exchangeCode', 'refresh', 'accountName'].forEach((name) => requireMember(p, name, isFn));
+    // The hosts `buildAuthorizeUrl` may point at: exact lower-case host names, no wildcards, no ports, no paths.
+    requireMember(p, 'authorizeHosts', isFn);
     if (p.revoke !== undefined && !isFn(p.revoke)) fail(p.id, 'invalid member "revoke"');
-    if (p.maxStateLength !== undefined && !(Number.isInteger(p.maxStateLength) && p.maxStateLength > 0)) {
-      fail(p.id, 'invalid member "maxStateLength"');
-    }
+    if (p.callbackCodeParam !== undefined && !(typeof p.callbackCodeParam === 'string'
+      && /^[a-z][a-z_]{0,31}$/.test(p.callbackCodeParam))) fail(p.id, 'invalid member "callbackCodeParam"');
+    if (p.maxStateBytes !== undefined && !(Number.isInteger(p.maxStateBytes)
+      && p.maxStateBytes >= 256 && p.maxStateBytes <= 8192)) fail(p.id, 'invalid member "maxStateBytes"');
+    ['requiresRefreshToken', 'rotatesRefreshToken'].forEach((name) => {
+      if (p[name] !== undefined && typeof p[name] !== 'boolean') fail(p.id, `invalid member "${name}"`);
+    });
   }
   return p;
 }

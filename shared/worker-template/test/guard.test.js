@@ -90,3 +90,20 @@ ${over}
   assert.match(analyzeConfig(base().replace(/ {12}limits:\n {14}timeout: 25000\n/, '')).errors.join(), /timeout/);
   assert.match(analyzeConfig('{{{').errors.join(), /valid YAML/);
 });
+
+test('optionalEnv in the worker package.json exempts named references from the missing/empty checks', () => {
+  const root = mkdtempSync(join(tmpdir(), 'guard-'));
+  try {
+    const dir = join(root, 'apps', 'hello-world', 'worker');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'app.config.yaml'), readFileSync(join(HELLO, 'app.config.yaml'), 'utf8'));
+    writeFileSync(join(dir, '.env'), 'ALLOWED_LOCAL_ORIGINS=\nHELLO_SECRET=\n');
+    assert.ok(checkDeploy(dir).some((e) => e.includes('HELLO_SECRET')));
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ optionalEnv: ['HELLO_SECRET'] }));
+    assert.deepEqual(checkDeploy(dir), []);
+    writeFileSync(join(dir, '.env'), 'ALLOWED_LOCAL_ORIGINS=\n');
+    assert.deepEqual(checkDeploy(dir), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

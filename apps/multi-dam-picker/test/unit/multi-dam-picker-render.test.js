@@ -351,10 +351,11 @@ describe('UI14/UI15: sources', () => {
     expect(single.$('.source')).to.equal(null);
   });
 
-  it('shows a provider that is not connected as unavailable with no grid and no asset call', async () => {
+  it('a service provider that reports another state is shown as unavailable: no grid, no connect panel, no asset call', async () => {
     const w = worker({ providers: [provider({ connection: { state: 'reauth_required' } })] });
     const ui = await mount({ worker: w });
     expect(ui.root.textContent).to.contain('is not available');
+    expect(ui.$('.connect')).to.equal(null);
     expect(ui.$('.grid')).to.equal(null);
     expect(w.searches()).to.have.length(0);
   });

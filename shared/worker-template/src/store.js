@@ -56,6 +56,21 @@ export function createStore({ workerName, clientFactory }) {
       if (Buffer.byteLength(text) > MAX_VALUE_BYTES) throw new StoreUsageError('store value is too large');
       await guard((c) => c.put(full, text, { ttl: ttlSeconds }));
     },
+    /**
+     * Conditional write: `when: 'absent'` writes only if the key does not exist (locks), `'present'` only if it does
+     * (a refresh must not resurrect a record that was deleted meanwhile). Resolves to true when written.
+     */
+    async putIf(key, value, { when, ttlSeconds = DEFAULT_TTL_SECONDS } = {}) {
+      if (when !== 'absent' && when !== 'present') throw new StoreUsageError('putIf needs when: "absent" or "present"');
+      const full = validate(workerName, key, ttlSeconds);
+      const text = JSON.stringify(value);
+      if (text === undefined) throw new StoreUsageError('store value must be JSON-serialisable');
+      if (Buffer.byteLength(text) > MAX_VALUE_BYTES) throw new StoreUsageError('store value is too large');
+      const written = await guard((c) => c.put(full, text, {
+        ttl: ttlSeconds, ...(when === 'absent' ? { ifNotExists: true } : { ifExists: true }),
+      }));
+      return written !== null;
+    },
     async delete(key) {
       const full = validate(workerName, key);
       await guard((c) => c.delete(full));
@@ -79,9 +94,13 @@ export function memoryStore({ workerName = 'memory', now = Date.now } = {}) {
         }
         return { value: e.value };
       },
-      put: async (key, value, { ttl }) => {
+      put: async (key, value, { ttl, ifNotExists, ifExists }) => {
+        const live = entries.get(key);
+        const exists = Boolean(live) && live.expiresAt > now();
+        if ((ifNotExists && exists) || (ifExists && !exists)) return null;
         puts.push({ key, ttl });
         entries.set(key, { value, expiresAt: now() + ttl * 1000 });
+        return key;
       },
       delete: async (key) => { entries.delete(key); },
     }),

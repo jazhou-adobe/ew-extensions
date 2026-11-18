@@ -49,21 +49,18 @@ test('PC2: malformed id, pattern, duplicates, empty types, bad default sort and 
   assert.throws(() => buildRegistry([stubService(), stubService()]), /duplicate id/);
 });
 
-test('PC5: user-oauth is defined but not hosted: complete -> "not hosted", incomplete -> names the member; no OAuth route exists', async () => {
-  assert.doesNotThrow(() => validateProvider(stubOAuth()));
-  assert.throws(() => buildRegistry([stubOAuth()]), /credential kind not hosted by this build/);
+test('PC5: user-oauth is hosted now: a complete declaration registers, an incomplete one names the member; the OAuth routes exist', async () => {
+  assert.doesNotThrow(() => buildRegistry([stubOAuth()]));
   const incomplete = stubOAuth();
   delete incomplete.refresh;
   assert.throws(() => buildRegistry([incomplete]), /missing member "refresh"/);
-  assert.doesNotThrow(() => buildRegistry([stubOAuth()], { hostedKinds: ['service', 'user-oauth'] }));
-  const w = await pickerWorld({ providers: [stubService(), stubOAuth()], inputs: stubInputs });
-  assert.equal((await w.call({ path: '/dam/providers' })).statusCode, 500, 'the build refuses to host it');
+  assert.throws(() => buildRegistry([stubOAuth()], { hostedKinds: ['service'] }), /credential kind not hosted by this build/);
   const live = await pickerWorld({ inputs: stubInputs });
-  const reserved = ['/dam/cloudinary/connect', '/dam/cloudinary/session', '/dam/cloudinary/disconnect', '/oauth/cloudinary/begin', '/oauth/cloudinary/callback'];
-  for (const path of reserved) {
+  // a service provider has no connection routes: they are unknown for it
+  for (const path of ['/dam/cloudinary/connect', '/dam/cloudinary/session', '/dam/cloudinary/disconnect']) {
     assert.equal((await live.call({ path, token: null })).statusCode, 401, path);
     assert.equal((await live.call({ path })).statusCode, 404, path);
-    assert.equal((await live.call({ path, method: 'POST' })).statusCode, path.startsWith('/dam') ? 405 : 404, path);
+    assert.equal((await live.call({ path, method: 'POST' })).statusCode, path.endsWith('session') ? 405 : 404, path);
   }
   assert.equal(live.store.entries.size, 0, 'no token store or cookie is created');
 });

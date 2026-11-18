@@ -144,6 +144,9 @@ const README_SECTIONS = [
   ['add-a-provider checklist', /^#+\s.*add a provider/im],
 ];
 
+// Vendor names may appear in the registry line and in config: app config, .env.example, optionalEnv in package.json.
+const VENDOR_ALLOWED = ['worker/app.config.yaml', 'worker/.env.example', 'worker/providers.js', 'worker/package.json'];
+
 const rel = (root, file) => relative(root, file).split('\\').join('/');
 const parts = (path) => path.split('/');
 
@@ -180,7 +183,7 @@ function checkProviderExtension(root, ext, errors) {
     const path = rel(extDir, file);
     if (!TEXT_FILE.test(path) && path !== 'worker/.env.example') return;
     if (path.startsWith('providers/') || isTestPath(path)) return;
-    if (['worker/app.config.yaml', 'worker/.env.example', 'worker/providers.js'].includes(path)) return;
+    if (VENDOR_ALLOWED.includes(path)) return;
     const text = readFileSync(file, 'utf8');
     vendors.filter((v) => names(v).test(text)).forEach((v) => {
       errors.push(`${where}/${path}: mentions the vendor "${v}" outside providers/${v}/ `

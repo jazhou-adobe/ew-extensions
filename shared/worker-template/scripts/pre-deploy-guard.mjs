@@ -29,7 +29,13 @@ export function checkDeploy(dir, processEnv = {}) {
     if (v !== undefined) env[k] = v;
   });
 
-  inputs.filter((i) => i.ref).forEach((i) => {
+  // `optionalEnv` in the worker's package.json names `.env` entries that may be missing or empty: a provider whose
+  // inputs are blank is simply not offered (the action omits it), so a deployment need not configure every provider.
+  const packagePath = join(dir, 'package.json');
+  const optional = new Set(existsSync(packagePath)
+    ? (JSON.parse(readFileSync(packagePath, 'utf8')).optionalEnv || []) : []);
+
+  inputs.filter((i) => i.ref && !optional.has(i.ref)).forEach((i) => {
     const value = env[i.ref];
     if (value === undefined) {
       errors.push(`${i.action}: $${i.ref} is not set in .env`);

@@ -11,11 +11,11 @@ import { makeInputs, makeParams } from './make-params.js';
  *
  * `vendor` replaces the scripted `upstream` with any double that has a `fetch(url, init)`.
  *
- * @param {{ name?: string, routes: object, secrets?: string[], authorize?: Function,
+ * @param {{ name?: string, routes: object, secrets?: string[], authorize?: Function, mode?: 'authenticated' | 'public',
  *           inputs?: object, upstream?: Array, vendor?: { fetch: Function }, deps?: object, now?: number }} options
  */
 export async function makeWorld({
-  name = 'test-worker', routes, secrets = [], authorize, inputs, upstream, vendor: vendorDouble, deps = {},
+  name = 'test-worker', routes, secrets = [], authorize, mode, inputs, upstream, vendor: vendorDouble, deps = {},
   now = Date.now(),
 }) {
   const ims = await fakeIms();
@@ -29,7 +29,7 @@ export async function makeWorld({
   const store = memoryStore({ workerName: name, now: () => clock.now });
   const worldInputs = makeInputs(inputs);
   const main = createAction({
-    name, routes, secrets, authorize,
+    name, routes, secrets, authorize, mode,
   }, {
     fetch: outbound,
     now: () => clock.now,

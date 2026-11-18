@@ -23,7 +23,7 @@ function parseRoutes(routes) {
   Object.entries(routes).forEach(([key, handler]) => {
     const m = /^([A-Z]+) (\/\S*)$/.exec(key);
     if (!m || typeof handler !== 'function') throw new Error(`invalid route "${key}" (expected "METHOD /path")`);
-    const wildcard = m[2].length > 2 && m[2].endsWith('/*');
+    const wildcard = m[2].endsWith('/*');
     const target = wildcard ? prefixes : table;
     let path = m[2];
     if (wildcard) path = path.slice(0, -1);
@@ -77,12 +77,15 @@ function toResult(value) {
  *   routes    { 'GET /path': async (ctx) => response | value }
  *   secrets   names of inputs that hold secrets (names that look like secrets are detected as well)
  *   authorize optional async ({ identity, claims, request }) => boolean
+ *   mode      'authenticated' (default: origin gate, CORS, IMS bearer token) or 'public' (no token, no CORS: for
+ *             browser navigations such as an OAuth redirect; the routes authenticate themselves)
  * @param {object} [deps] injectable seams: fetch, sleep, random, now, store, log, env, requestId, jwksCooldownMs
  */
 export function createAction({
-  name, routes, secrets: declaredSecrets = [], authorize,
+  name, routes, secrets: declaredSecrets = [], authorize, mode = 'authenticated',
 }, deps = {}) {
   if (!name) throw new Error('createAction: name is required');
+  if (mode !== 'authenticated' && mode !== 'public') throw new Error('createAction: unknown mode');
   const { methods, find } = parseRoutes(routes);
   const {
     fetch: fetchImpl = (...a) => fetch(...a), sleep, random, now = Date.now,
@@ -113,49 +116,15 @@ export function createAction({
       const request = decodeRequest(params);
       state.origin = request.header('origin');
 
-      // (2) origin gate
-      const isAllowed = createOriginMatcher({
-        org: config.ORG, site: config.SITE, localOrigins: config.ALLOWED_LOCAL_ORIGINS,
-      });
-      if (state.origin !== undefined) {
-        state.allowed = isAllowed(state.origin);
-        if (!state.allowed) throw new HttpError('forbidden_origin');
-      }
-
-      // (3) preflight short-circuit
-      if (request.method === 'OPTIONS' && state.allowed) {
-        state.route = 'preflight';
-        state.preflight = true;
-        result = { statusCode: 204, headers: {}, body: '' };
-      } else {
-        // (4) authentication
-        const token = bearerToken(request.header('authorization'));
-        if (!token) throw new HttpError('unauthorized');
-        secrets.addSensitive(token);
-        const key = `${config.IMS_ORIGIN}|${config.ALLOWED_IMS_CLIENT_IDS}`;
-        if (!authenticator || authKey !== key) {
-          authKey = key;
-          authenticator = createAuthenticator({
-            imsOrigin: config.IMS_ORIGIN,
-            fetchImpl,
-            now,
-            cooldownMs: jwksCooldownMs,
-            allowedClientIds: config.ALLOWED_IMS_CLIENT_IDS,
-          });
-        }
-        const { identity, claims } = await authenticator(token);
-        state.userId = identity.userId;
-        if (authorize && !(await authorize({ identity, claims, request }))) throw new HttpError('forbidden');
+      // (5) routing and (6) handler: shared by the authenticated and the public variant.
+      const dispatch = async (identity, claims) => {
         if (request.rawBodyLength > MAX_REQUEST_BODY) throw new HttpError('payload_too_large');
-
-        // (5) routing
         const found = find(request.path);
         if (!found) throw new HttpError('not_found');
         const entry = found.byMethod.get(request.method);
         if (!entry) throw new HttpError('method_not_allowed');
         state.route = entry.pattern;
 
-        // (6) handler
         storeInstance ||= createStore({
           workerName: name,
           clientFactory: stateClientFactory(config.STATE_REGION),
@@ -172,14 +141,21 @@ export function createAction({
         };
         const ctx = {
           request,
-          identity: Object.freeze(identity),
+          identity: identity ? Object.freeze(identity) : undefined,
           claims,
           config,
           secret: secrets.secret,
+          // Like `secret`, but a missing input is `undefined` and not an error (optional settings).
+          optionalSecret: secrets.optionalSecret,
+          // Registers a value that only exists at runtime (a user's access token, a sealed value) for redaction.
+          addSensitive: secrets.addSensitive,
           store: storeInstance,
           requestId,
           rest: found.rest,
           now,
+          startedAt,
+          deadline,
+          sleep: sleep || ((ms) => new Promise((resolve) => { setTimeout(resolve, ms); })),
           log: (event, fields) => logger(event, fields),
           // Adds safe fields (ids, enums, counts; never user text) to the request's final log line.
           annotate: (fields) => { Object.assign(state.extra, fields); },
@@ -190,12 +166,55 @@ export function createAction({
               const user = usernameSecret ? secrets.secret(usernameSecret) : username;
               secrets.addSensitive(Buffer.from(`${user}:${secrets.secret(opts.auth.secret)}`).toString('base64'));
             }
+            if (typeof opts.auth?.token === 'string') secrets.addSensitive(opts.auth.token);
             const res = await rawProxy(url, init, opts, proxyDeps);
             return opts.mapErrors === false ? res : mapUpstream(res, opts, now);
           },
           fromUpstream,
         };
-        result = toResult(await entry.handler(ctx));
+        return toResult(await entry.handler(ctx));
+      };
+
+      if (mode === 'public') {
+        // Public variant (browser navigations that cannot carry a token): no origin gate, no IMS check, CORS is
+        // never enabled. Every handler must authenticate its own request (sealed values).
+        result = await dispatch(undefined, undefined);
+      } else {
+        // (2) origin gate
+        const isAllowed = createOriginMatcher({
+          org: config.ORG, site: config.SITE, localOrigins: config.ALLOWED_LOCAL_ORIGINS,
+        });
+        if (state.origin !== undefined) {
+          state.allowed = isAllowed(state.origin);
+          if (!state.allowed) throw new HttpError('forbidden_origin');
+        }
+
+        // (3) preflight short-circuit
+        if (request.method === 'OPTIONS' && state.allowed) {
+          state.route = 'preflight';
+          state.preflight = true;
+          result = { statusCode: 204, headers: {}, body: '' };
+        } else {
+          // (4) authentication
+          const token = bearerToken(request.header('authorization'));
+          if (!token) throw new HttpError('unauthorized');
+          secrets.addSensitive(token);
+          const key = `${config.IMS_ORIGIN}|${config.ALLOWED_IMS_CLIENT_IDS}`;
+          if (!authenticator || authKey !== key) {
+            authKey = key;
+            authenticator = createAuthenticator({
+              imsOrigin: config.IMS_ORIGIN,
+              fetchImpl,
+              now,
+              cooldownMs: jwksCooldownMs,
+              allowedClientIds: config.ALLOWED_IMS_CLIENT_IDS,
+            });
+          }
+          const { identity, claims } = await authenticator(token);
+          state.userId = identity.userId;
+          if (authorize && !(await authorize({ identity, claims, request }))) throw new HttpError('forbidden');
+          result = await dispatch(identity, claims);
+        }
       }
     } catch (e) {
       const known = e instanceof HttpError;

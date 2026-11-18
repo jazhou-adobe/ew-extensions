@@ -98,6 +98,7 @@ export function fakeWorker(respond) {
       url: String(url),
       path: u.pathname.replace(/^\/api\/v1\/web\/multi-dam-picker\/api/, ''),
       query: Object.fromEntries(u.searchParams),
+      method: init.method || 'GET',
       authorization: init.headers?.authorization,
       signal: init.signal,
     };

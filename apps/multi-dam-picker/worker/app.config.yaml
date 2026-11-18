@@ -1,4 +1,5 @@
-# App Builder application root for the multi-dam-picker extension's backend (one raw web action).
+# App Builder application root for the multi-dam-picker extension's backend: two raw web actions, `api` (every call
+# carries an IMS token) and `oauth` (the two browser navigations of the sign-in pop-up; no token, no CORS).
 # Secrets are `$NAME` references filled from the untracked .env at deploy time; everything else is a reviewable literal.
 application:
   hooks:
@@ -37,7 +38,47 @@ application:
               CLOUDINARY_RENDITIONS: ''
               CLOUDINARY_DELIVERY_HOSTS: ''
               CLOUDINARY_CACHE_SECONDS: '30'
+              # Dropbox provider (per-author OAuth). Blank client id or secret = Dropbox is not offered.
+              DROPBOX_CLIENT_ID: $DROPBOX_CLIENT_ID
+              DROPBOX_CLIENT_SECRET: $DROPBOX_CLIENT_SECRET
+              DROPBOX_ROOT_PATH: $DROPBOX_ROOT_PATH
+              DROPBOX_SCOPES: account_info.read files.metadata.read files.content.read sharing.read sharing.write
+              DROPBOX_ALT_TEMPLATE_ID: ''
+              DROPBOX_ALT_FIELD: ''
+              DROPBOX_CACHE_SECONDS: '30'
+              # Per-author OAuth host shared by every OAuth provider. Blank = no OAuth provider is offered.
+              OAUTH_PUBLIC_BASE_URL: $OAUTH_PUBLIC_BASE_URL
+              TOKEN_ENC_KEY: $TOKEN_ENC_KEY
+              TOKEN_ENC_KEY_PREVIOUS: $TOKEN_ENC_KEY_PREVIOUS
+              OAUTH_STATE_KEY: $OAUTH_STATE_KEY
+              CONNECTION_TTL_DAYS: '180'
             annotations:
+              web-custom-options: true
+              require-adobe-auth: false
+              final: true
+            limits:
+              timeout: 25000
+              memory: 256
+          oauth:
+            function: actions/oauth/index.js
+            web: raw
+            runtime: nodejs:22
+            inputs:
+              ORG: jazhou-adobe
+              SITE: ew-extensions,ew-extensions-demo
+              STATE_REGION: amer
+              ALLOWED_LOCAL_ORIGINS: $ALLOWED_LOCAL_ORIGINS
+              DROPBOX_CLIENT_ID: $DROPBOX_CLIENT_ID
+              DROPBOX_CLIENT_SECRET: $DROPBOX_CLIENT_SECRET
+              DROPBOX_ROOT_PATH: $DROPBOX_ROOT_PATH
+              DROPBOX_SCOPES: account_info.read files.metadata.read files.content.read sharing.read sharing.write
+              OAUTH_PUBLIC_BASE_URL: $OAUTH_PUBLIC_BASE_URL
+              TOKEN_ENC_KEY: $TOKEN_ENC_KEY
+              TOKEN_ENC_KEY_PREVIOUS: $TOKEN_ENC_KEY_PREVIOUS
+              OAUTH_STATE_KEY: $OAUTH_STATE_KEY
+              CONNECTION_TTL_DAYS: '180'
+            annotations:
+              # No `require-adobe-auth`: the pop-up's redirects cannot carry a token. The only unauthenticated action.
               web-custom-options: true
               require-adobe-auth: false
               final: true

@@ -4,5 +4,14 @@
   "version": "0.0.0",
   "description": "Backend (Adobe App Builder web action) for the multi-dam-picker extension.",
   "type": "module",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "optionalEnv": [
+    "OAUTH_PUBLIC_BASE_URL",
+    "TOKEN_ENC_KEY",
+    "TOKEN_ENC_KEY_PREVIOUS",
+    "OAUTH_STATE_KEY",
+    "DROPBOX_CLIENT_ID",
+    "DROPBOX_CLIENT_SECRET",
+    "DROPBOX_ROOT_PATH"
+  ]
 }

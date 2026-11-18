@@ -8,6 +8,8 @@ export const ERRORS = {
   not_found: { status: 404, message: 'Not found.' },
   method_not_allowed: { status: 405, message: 'Method not allowed.' },
   payload_too_large: { status: 413, message: 'The request is too large.' },
+  provider_not_connected: { status: 409, message: 'The provider is not connected for this user.' },
+  provider_reauth_required: { status: 409, message: 'The provider connection must be renewed.' },
   rate_limited: { status: 429, message: 'Too many requests. Try again later.' },
   misconfigured: { status: 500, message: 'The service is not configured correctly.' },
   internal: { status: 500, message: 'Internal error.' },

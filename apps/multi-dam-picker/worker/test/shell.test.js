@@ -140,7 +140,7 @@ test('SH7: unknown provider fields never appear in the response, including secre
 
 test('SH8/PC6: provider failure classes map to the error contract with fixed messages', async () => {
   const cases = [['bad_request', 400, 'bad_request'], ['not_found', 404, 'not_found'], ['forbidden', 403, 'forbidden'], ['misconfigured', 500, 'misconfigured'],
-    ['upstream_unavailable', 502, 'upstream_unavailable'], ['rate_limited', 429, 'rate_limited'], ['reauth_required', 500, 'internal'], ['not_connected', 500, 'internal']];
+    ['upstream_unavailable', 502, 'upstream_unavailable'], ['rate_limited', 429, 'rate_limited'], ['reauth_required', 409, 'provider_reauth_required'], ['not_connected', 409, 'provider_not_connected']];
   for (const [kind, status, code] of cases) {
     const w = await stubWorld({ async search() { throw new ProviderError(kind, { retryAfterSeconds: 30 }); }, async getAsset() { throw new ProviderError(kind); } });
     for (const path of ['/dam/stubdam/assets', `/dam/stubdam/assets/${ID(1)}`]) {
@@ -213,7 +213,7 @@ test('PC7: a provider never receives the IMS token, Authorization, cookies or th
   await w.call({ path: '/dam/stubdam/assets', token: tok, headers: { cookie: 'session=abc' } });
   await w.call({ path: `/dam/stubdam/assets/${ID(1)}`, token: tok });
   w.stub.calls.forEach(({ ctx }) => {
-    assert.deepEqual(Object.keys(ctx).sort(), ['config', 'log', 'now', 'proxy', 'requestId', 'secret', 'store']);
+    assert.deepEqual(Object.keys(ctx).sort(), ['config', 'log', 'now', 'proxy', 'requestId', 'secret', 'store', 'timeLeftMs']);
     assert.throws(() => ctx.secret('SOME_OTHER_SECRET'));
     assert.equal(typeof ctx.secret('STUBDAM_TOKEN'), 'string');
     const seen = JSON.stringify({ config: ctx.config, requestId: ctx.requestId });

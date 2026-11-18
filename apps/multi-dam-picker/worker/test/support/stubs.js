@@ -49,13 +49,14 @@ export function stubService(overrides = {}) {
   };
 }
 
-/** A complete `user-oauth` declaration (id `oauthdam`): validates, but the build does not host the kind yet. */
+/** A complete `user-oauth` declaration (id `oauthdam`); its members never touch a network. */
 export function stubOAuth(overrides = {}) {
   return {
     ...stubService({
       id: 'oauthdam', label: 'OAuth DAM', credentialKind: 'user-oauth',
     }),
     scopes: ['files.read'],
+    authorizeHosts: () => ['auth.stub.example'],
     buildAuthorizeUrl: () => 'https://auth.stub.example/authorize',
     exchangeCode: async () => ({}),
     refresh: async () => ({}),

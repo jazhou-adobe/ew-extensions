@@ -1,16 +1,25 @@
-// Shell routes (SPEC D20): GET /dam/providers, GET /dam/{provider}/assets, GET /dam/{provider}/assets/{id}.
-// The shell owns validation, the result cache, error mapping, the output URL policy and logging; a provider only
-// maps its vendor API. The IMS token, request headers and cookies never reach a provider.
+// Shell routes of the authenticated `api` action (SPEC D20):
+//   GET  /dam/providers                      the configured providers, their connection and capabilities
+//   GET  /dam/{provider}/assets[/{id}]       search and detail
+//   POST /dam/{provider}/connect             `user-oauth`: a one-time URL that starts the sign-in pop-up
+//   GET  /dam/{provider}/session             `user-oauth`: the author's connection state
+//   POST /dam/{provider}/disconnect          `user-oauth`: revoke upstream (best effort) and forget the connection
+// The shell owns validation, the result cache, error mapping, the output URL policy, token storage and refresh, and
+// logging; a provider only maps its vendor API. The IMS token, request headers and cookies never reach a provider.
 import { createHash } from 'node:crypto';
 import { HttpError } from '../../../../shared/worker-template/src/index.js';
 import {
-  buildRegistry, ConfigError, ProviderError, HOSTED_KINDS, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX, MAX_QUERY_LENGTH,
-  CACHE_MAX_BYTES,
+  ProviderError, HOSTED_KINDS, PAGE_SIZE_DEFAULT, PAGE_SIZE_MAX, MAX_QUERY_LENGTH, CACHE_MAX_BYTES,
 } from './provider.js';
 import { normalizeDetail, normalizeList } from './policy.js';
+import { createHost } from './registry.js';
+import {
+  connectionOf, connKeyOf, credentialsFor, credentialsOf, deleteRecord, readRecord, withCredentials,
+} from './connections.js';
+import { sha256Base64Url } from './seal.js';
 
-const SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
 const NUMBER = /^[0-9]{1,6}$/;
+const SEGMENT = /^[A-Za-z0-9_-]{1,64}$/;
 
 const clampRetry = (n) => (Number.isFinite(n) ? Math.min(3600, Math.max(1, Math.ceil(n))) : 60);
 
@@ -24,6 +33,8 @@ function mapFailure(e, provider, ctx) {
       case 'forbidden': return new HttpError('forbidden');
       case 'rate_limited': return new HttpError('rate_limited', { retryAfterSeconds: clampRetry(e.retryAfterSeconds) });
       case 'misconfigured': return new HttpError('misconfigured');
+      case 'reauth_required': return new HttpError('provider_reauth_required');
+      case 'not_connected': return new HttpError('provider_not_connected');
       case 'upstream_unavailable': return new HttpError('upstream_unavailable');
       default: return new HttpError('internal');
     }
@@ -31,30 +42,13 @@ function mapFailure(e, provider, ctx) {
   return e;
 }
 
-/** Best-effort store view for a provider: keys are suffixed with the provider id; a failing store is swallowed. */
-function providerStore(store, id) {
-  const guard = async (fn, fallback) => {
-    try {
-      return await fn();
-    } catch (e) {
-      if (e instanceof HttpError) return fallback;
-      throw e;
-    }
-  };
-  return Object.freeze({
-    get: (key) => guard(() => store.get(`${key}.${id}`), undefined),
-    put: (key, value, opts) => guard(() => store.put(`${key}.${id}`, value, opts), undefined),
-    delete: (key) => guard(() => store.delete(`${key}.${id}`), undefined),
-  });
-}
-
-function describeProvider({ provider, config }) {
+function describeProvider({ provider, config }, connection) {
   const account = provider.accountLabel ? provider.accountLabel(config) : undefined;
   return {
     id: provider.id,
     label: provider.label,
     credentialKind: provider.credentialKind,
-    connection: { state: 'connected', ...(account ? { account } : {}) },
+    connection: connection || { state: 'connected', ...(account ? { account } : {}) },
     capabilities: {
       assetTypes: provider.assetTypes,
       sorts: provider.sorts.map(({ id, label, requiresQuery }) => ({
@@ -90,61 +84,33 @@ function parseSearch(request, provider) {
   };
 }
 
+const USER_CACHE_MAX_ENTRIES = 40;
+
+/** The id segment as the provider's pattern sees it: a percent-encoded id (`id%3Aabc`) is decoded once. */
+function decodeId(segment) {
+  if (!segment.includes('%')) return segment;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    throw new HttpError('bad_request');
+  }
+}
+
 /**
- * Builds the route table for the worker.
+ * Builds the route table for the `api` action.
  * @param {{ providers: object[], hostedKinds?: string[] }} options
  */
 export function createRoutes({ providers, hostedKinds = HOSTED_KINDS }) {
-  let registry;
-  const getRegistry = (ctx) => {
-    try {
-      registry ||= buildRegistry(providers, { hostedKinds });
-    } catch (e) {
-      ctx.log('registry_invalid', { reason: e.message });
-      throw new HttpError('misconfigured');
-    }
-    return registry;
-  };
-
-  /** Providers whose required inputs are present, with their validated config. Invalid present values fail. */
-  function configured(ctx) {
-    const out = new Map();
-    getRegistry(ctx).forEach((provider) => {
-      const present = provider.config.required.every((n) => typeof ctx.config[n] === 'string' && ctx.config[n].trim());
-      if (!present) return;
-      const secretsOk = provider.config.secrets.every((n) => {
-        try {
-          return Boolean(ctx.secret(n));
-        } catch {
-          return false;
-        }
-      });
-      if (!secretsOk) return;
-      let config;
-      try {
-        config = provider.config.resolve(ctx.config);
-      } catch (e) {
-        if (!(e instanceof ConfigError)) throw e;
-        ctx.log('config_invalid', { provider: provider.id, setting: e.setting });
-        throw new HttpError('misconfigured');
-      }
-      out.set(provider.id, { provider, config });
+  const host = createHost({ providers, hostedKinds });
+  const { configured, callContext, oauthSettings } = host;
+  // Result cache of `user-oauth` providers: container memory only (file names of private files never go to State),
+  // per author (the key includes the connection key), dropped on disconnect and on a reconnect demand.
+  const userCache = new Map();
+  const dropUserCache = (connKey) => {
+    [...userCache.entries()].forEach(([k, v]) => {
+      if (v.connKey === connKey) userCache.delete(k);
     });
-    return out;
-  }
-
-  const callContext = (ctx, { provider, config }) => Object.freeze({
-    config,
-    now: ctx.now,
-    requestId: ctx.requestId,
-    secret: (name) => {
-      if (!provider.config.secrets.includes(name)) throw new Error('secret not declared by the provider');
-      return ctx.secret(name);
-    },
-    proxy: (url, init, opts = {}) => ctx.proxy(url, init, { ...opts, allowedHosts: provider.outboundHosts(config) }),
-    store: providerStore(ctx.store, provider.id),
-    log: (event, fields) => ctx.log(event, { ...fields, provider: provider.id }),
-  });
+  };
 
   async function readCache(ctx, key) {
     try {
@@ -155,12 +121,50 @@ export function createRoutes({ providers, hostedKinds = HOSTED_KINDS }) {
     }
   }
 
+  async function searchOAuth(ctx, entry, query) {
+    const { provider, config } = entry;
+    const settings = oauthSettings(ctx);
+    const connKey = connKeyOf(ctx.identity.userId, provider.id);
+    const ttl = provider.cacheSeconds(config);
+    const hosts = provider.deliveryHosts(config).map((h) => h.toLowerCase());
+    const key = sha256Base64Url(connKey, JSON.stringify([provider.fingerprint(config), query]));
+    let hit;
+    // The connection is checked (and refreshed when needed) before any cached answer is served.
+    const raw = await withCredentials(ctx, host, entry, settings, async (credentials) => {
+      const cached = ttl > 0 ? userCache.get(key) : undefined;
+      if (cached && cached.expiresAt > ctx.now()) {
+        hit = cached.value;
+        return undefined;
+      }
+      return provider.search(callContext(ctx, entry, { credentials }), query);
+    });
+    if (hit) {
+      ctx.annotate({ cache: 'hit' });
+      return hit;
+    }
+    const result = normalizeList(raw, provider, hosts, query);
+    ctx.annotate({ cache: ttl > 0 ? 'miss' : 'off' });
+    if (ttl > 0 && Buffer.byteLength(JSON.stringify(result)) <= CACHE_MAX_BYTES * 8) {
+      userCache.delete(key);
+      userCache.set(key, { connKey, expiresAt: ctx.now() + ttl * 1000, value: result });
+      if (userCache.size > USER_CACHE_MAX_ENTRIES) userCache.delete(userCache.keys().next().value);
+    }
+    return result;
+  }
+
   async function search(ctx, entry, request) {
     const { provider, config } = entry;
     const query = parseSearch(request, provider);
+    ctx.annotate({ provider: provider.id, op: 'search' });
+    if (provider.credentialKind === 'user-oauth') {
+      try {
+        return await searchOAuth(ctx, entry, query);
+      } catch (e) {
+        throw mapFailure(e, provider, ctx);
+      }
+    }
     const ttl = provider.cacheSeconds(config);
     const hosts = provider.deliveryHosts(config).map((h) => h.toLowerCase());
-    ctx.annotate({ provider: provider.id, op: 'search' });
     let key;
     let storeUp = true;
     if (ttl > 0) {
@@ -197,7 +201,12 @@ export function createRoutes({ providers, hostedKinds = HOSTED_KINDS }) {
     ctx.annotate({ provider: provider.id, op: 'detail' });
     let raw;
     try {
-      raw = await provider.getAsset(callContext(ctx, entry), id);
+      raw = provider.credentialKind === 'user-oauth'
+        ? await withCredentials(ctx, host, entry, oauthSettings(ctx), (credentials) => provider.getAsset(
+          callContext(ctx, entry, { credentials }),
+          id,
+        ))
+        : await provider.getAsset(callContext(ctx, entry), id);
     } catch (e) {
       throw mapFailure(e, provider, ctx);
     }
@@ -205,22 +214,109 @@ export function createRoutes({ providers, hostedKinds = HOSTED_KINDS }) {
     return { asset: normalizeDetail(raw, provider, hosts) };
   }
 
+  /** Connection state of the calling author for one `user-oauth` provider. */
+  async function connectionFor(ctx, entry) {
+    const settings = oauthSettings(ctx);
+    const record = await readRecord(ctx, settings, connKeyOf(ctx.identity.userId, entry.provider.id));
+    return connectionOf(record);
+  }
+
+  async function connect(ctx, entry) {
+    const { provider } = entry;
+    const settings = oauthSettings(ctx);
+    const connKey = connKeyOf(ctx.identity.userId, provider.id);
+    // The sealed state the begin step will build is about this long: refuse here instead of truncating later.
+    const sample = settings.state.seal({
+      p: 'state', provider: provider.id, conn: connKey, n: sha256Base64Url('nonce'), exp: ctx.now() + 600_000,
+    }, 'state');
+    if (Buffer.byteLength(sample) > (provider.maxStateBytes ?? 2000)) {
+      ctx.log('state_too_long', { provider: provider.id });
+      throw new HttpError('bad_request');
+    }
+    const ticket = settings.state.seal({
+      p: 'ticket', provider: provider.id, conn: connKey, exp: ctx.now() + 60_000,
+    }, 'ticket');
+    ctx.annotate({ provider: provider.id, op: 'connect' });
+    return { beginUrl: `${settings.baseUrl}/${provider.id}/begin?ticket=${encodeURIComponent(ticket)}` };
+  }
+
+  async function disconnect(ctx, entry) {
+    const { provider } = entry;
+    const settings = oauthSettings(ctx);
+    const connKey = connKeyOf(ctx.identity.userId, provider.id);
+    ctx.annotate({ provider: provider.id, op: 'disconnect' });
+    const record = await readRecord(ctx, settings, connKey);
+    if (record && !record.reauth && provider.revoke) {
+      // Best effort: the record is deleted whatever happens upstream (a stuck record cannot be fixed by the author).
+      try {
+        const fresh = await credentialsFor(ctx, host, entry, settings);
+        await provider.revoke(callContext(ctx, entry, { credentials: credentialsOf(fresh) }));
+      } catch (e) {
+        ctx.log('revoke_failed', { provider: provider.id, class: e instanceof ProviderError ? e.kind : 'error' });
+      }
+    }
+    await deleteRecord(ctx, connKey);
+    dropUserCache(connKey);
+    return { connection: connectionOf(undefined) };
+  }
+
+  const split = (ctx) => {
+    const segments = ctx.rest.split('/');
+    const [providerId, resource, id, ...extra] = segments;
+    return {
+      segments, providerId, resource, id, extra,
+    };
+  };
+  const entryFor = (ctx, providerId) => {
+    if (!SEGMENT.test(providerId || '')) throw new HttpError('not_found');
+    const entry = configured(ctx).get(providerId);
+    if (!entry) throw new HttpError('not_found');
+    return entry;
+  };
+  const oauthEntryFor = (ctx, providerId) => {
+    const entry = entryFor(ctx, providerId);
+    if (entry.provider.credentialKind !== 'user-oauth') throw new HttpError('not_found');
+    return entry;
+  };
+
   return {
     'GET /dam/providers': async (ctx) => {
       const entries = [...configured(ctx).values()];
-      return { providers: entries.map(describeProvider) };
+      const described = [];
+      for (const entry of entries) {
+        // eslint-disable-next-line no-await-in-loop
+        const connection = entry.provider.credentialKind === 'user-oauth' ? await connectionFor(ctx, entry) : undefined;
+        described.push(describeProvider(entry, connection));
+      }
+      return { providers: described };
     },
     'GET /dam/*': async (ctx) => {
-      const segments = ctx.rest.split('/');
-      const [providerId, resource, id, ...extra] = segments;
+      const {
+        segments, providerId, resource, id, extra,
+      } = split(ctx);
+      if (resource === 'session' && segments.length === 2) {
+        const entry = oauthEntryFor(ctx, providerId);
+        ctx.annotate({ provider: providerId, op: 'session' });
+        return { connection: await connectionFor(ctx, entry) };
+      }
       if (!SEGMENT.test(providerId || '') || resource !== 'assets' || extra.length || (id !== undefined && id === '')
         || segments.length > 3) {
         throw new HttpError('not_found');
       }
-      const entry = configured(ctx).get(providerId);
-      if (!entry) throw new HttpError('not_found');
+      const entry = entryFor(ctx, providerId);
       if (id === undefined) return search(ctx, entry, ctx.request);
-      return detail(ctx, entry, id);
+      return detail(ctx, entry, decodeId(id));
+    },
+    'POST /dam/*': async (ctx) => {
+      const { segments, providerId, resource } = split(ctx);
+      if ((segments.length === 1 && providerId === 'providers') || resource === 'assets' || resource === 'session') {
+        throw new HttpError('method_not_allowed');
+      }
+      if (segments.length !== 2 || (resource !== 'connect' && resource !== 'disconnect')) {
+        throw new HttpError('not_found');
+      }
+      const entry = oauthEntryFor(ctx, providerId);
+      return resource === 'connect' ? connect(ctx, entry) : disconnect(ctx, entry);
     },
   };
 }

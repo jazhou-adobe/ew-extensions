@@ -279,6 +279,7 @@ test('providers: a complete provider extension passes; vendor names in allowed p
     ...withProvider(),
     'apps/foo/worker/test/acme.test.js': "const x = 'acme';",
     'apps/foo/worker/test/fixtures/acme.json': '{"vendor":"Acme"}',
+    'apps/foo/worker/package.json': '{"optionalEnv":["ACME_CLIENT_ID"]}',
   }), []);
 });
 

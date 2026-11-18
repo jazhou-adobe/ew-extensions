@@ -69,17 +69,19 @@ function buildHeaders(init, { json }) {
 /** Resolves the credential to inject: `{ header: [name, value] }` or `{ query: [name, value] }`. */
 function authFor(auth, secret) {
   if (!auth) return {};
-  const value = secret(auth.secret);
   switch (auth.scheme) {
     case 'bearer':
-      return { header: ['authorization', `Bearer ${value}`] };
+      // A per-call token (a user's access token) or the value of a named secret input.
+      return {
+        header: ['authorization', `Bearer ${typeof auth.token === 'string' ? auth.token : secret(auth.secret)}`],
+      };
     case 'header':
-      return { header: [String(auth.name).toLowerCase(), value] };
+      return { header: [String(auth.name).toLowerCase(), secret(auth.secret)] };
     case 'query':
-      return { query: [auth.name, value] };
+      return { query: [auth.name, secret(auth.secret)] };
     case 'basic': {
       const user = auth.usernameSecret ? secret(auth.usernameSecret) : (auth.username || '');
-      return { header: ['authorization', `Basic ${Buffer.from(`${user}:${value}`).toString('base64')}`] };
+      return { header: ['authorization', `Basic ${Buffer.from(`${user}:${secret(auth.secret)}`).toString('base64')}`] };
     }
     default:
       throw new Error('proxy: unknown auth scheme');
