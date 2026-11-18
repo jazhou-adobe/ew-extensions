@@ -9,14 +9,16 @@ function splitList(value) {
 }
 
 /**
- * Builds the origin matcher (SPEC Decision 8): `https://da.live`, the code site's own origins
- * `https://{ref}--{site}--{org}.{aem.live|aem.page|preview.da.live}`, and exact local origins.
+ * Builds the origin matcher (SPEC Decision 8): `https://da.live`, the code sites' own origins
+ * `https://{ref}--{site}--{org}.{aem.live|aem.page|preview.da.live}` (`site` may be a comma list, e.g. the code repo
+ * plus a DA test site that vendors the extension), and exact local origins.
  * Matching is exact and anchored; there is no wildcard or suffix matching.
  */
 export function createOriginMatcher({ org, site, localOrigins }) {
   const local = new Set(splitList(localOrigins));
   const hosts = '(?:aem\\.live|aem\\.page|preview\\.da\\.live)';
-  const own = new RegExp(`^https://[a-z0-9][a-z0-9-]*--${escape(site)}--${escape(org)}\\.${hosts}$`);
+  const sites = splitList(site).map(escape).join('|');
+  const own = new RegExp(`^https://[a-z0-9][a-z0-9-]*--(?:${sites})--${escape(org)}\\.${hosts}$`);
   return (origin) => {
     if (typeof origin !== 'string' || !origin || origin === 'null' || origin === '*') return false;
     return origin === 'https://da.live' || local.has(origin) || own.test(origin);

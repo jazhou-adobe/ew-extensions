@@ -11,10 +11,15 @@ export const WORKERS = {
 };
 
 const CODE_SITE = /^([a-z0-9][a-z0-9-]*)--ew-extensions--jazhou-adobe\.(aem\.live|aem\.page|preview\.da\.live)$/;
+// DA test site that vendors this page (`npm run package:extension`); it is a test site, so every ref uses Stage.
+const TEST_SITE = /^[a-z0-9][a-z0-9-]*--ew-extensions-demo--jazhou-adobe\.(aem\.live|aem\.page|preview\.da\.live)$/;
 
-/** Which worker serves this page: `main` pages use Production, other refs and `localhost` use Stage, others none. */
+/**
+ * Which worker serves this page: `main` code-site pages use Production; other refs, the DA test site and `localhost`
+ * use Stage; anything else none.
+ */
 export function workerFor(hostname) {
-  if (hostname === 'localhost') return { env: 'stage', base: WORKERS.stage };
+  if (hostname === 'localhost' || TEST_SITE.test(hostname)) return { env: 'stage', base: WORKERS.stage };
   const m = CODE_SITE.exec(hostname);
   if (!m) return null;
   return m[1] === 'main' ? { env: 'production', base: WORKERS.production } : { env: 'stage', base: WORKERS.stage };

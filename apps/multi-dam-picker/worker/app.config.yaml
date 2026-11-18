@@ -14,7 +14,9 @@ application:
             runtime: nodejs:22
             inputs:
               ORG: jazhou-adobe
-              SITE: ew-extensions
+              # Code sites whose pages may call this worker: the code repo, plus the DA test site that vendors the
+              # picker via `npm run package:extension` (comma list).
+              SITE: ew-extensions,ew-extensions-demo
               IMS_ORIGIN: https://ims-na1.adobelogin.com
               ALLOWED_IMS_CLIENT_IDS: ''
               STATE_REGION: amer

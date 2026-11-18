@@ -15,6 +15,7 @@
     "lint:js": "eslint .",
     "lint:css": "stylelint \"apps/**/*.css\"",
     "check": "node scripts/check-conventions.mjs",
+    "package:extension": "node scripts/package-extension.mjs",
     "test": "npm run test:unit && npm run test:scripts",
     "test:unit": "wtr",
     "test:scripts": "node --test \"scripts/*.test.mjs\"",

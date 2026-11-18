@@ -83,6 +83,18 @@ test('UC3: localhost only through the exact ALLOWED_LOCAL_ORIGINS list', async (
   }
 });
 
+test('UC3b: SITE as a comma list allows each listed code site and nothing else', async () => {
+  const w = await build({ inputs: { SITE: `${SITE}, ${SITE}-demo` } });
+  for (const origin of [`https://main--${SITE}--${OWN}.aem.live`, `https://main--${SITE}-demo--${OWN}.aem.page`]) {
+    // eslint-disable-next-line no-await-in-loop
+    assert.equal((await w.call({ path: '/ping', origin })).statusCode, 200, origin);
+  }
+  for (const origin of [`https://main--${SITE}-demo2--${OWN}.aem.live`, `https://main--other-site--${OWN}.aem.live`]) {
+    // eslint-disable-next-line no-await-in-loop
+    assert.equal((await w.call({ path: '/ping', origin })).statusCode, 403, origin);
+  }
+});
+
 test('UC4: preflight from an allowed origin', async () => {
   const w = await build();
   const res = await w.call({

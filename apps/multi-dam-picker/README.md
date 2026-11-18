@@ -35,6 +35,26 @@ In `https://da.live/config#/jazhou-adobe/ew-extensions-demo/` (the DA test site)
 Replace `BRANCH` (twice) with a simple branch name and keep that row only while you test the branch. `experience` may also be blank
 (inline); the page works in both. `fullsize-dialog` is known from the da-live source, not from the public docs.
 
+### Installed in the DA test site repo (vendored)
+
+The picker's browser files can also be installed into the demo site's own repo, so it is served by the demo site
+without Code Sync on this repo. From this repo, with `ew-extensions-demo` checked out next to it:
+
+```sh
+npm run package:extension -- multi-dam-picker ../ew-extensions-demo
+```
+
+This replaces `ew-extensions-demo/apps/multi-dam-picker/` with the browser files only (no `worker/`, tests or docs) and
+records the source commit in `.vendored.json`. Commit and push in the demo repo, then add this `library` row (a relative
+path resolves against the demo site itself):
+
+| title | path | format | ref | icon | experience |
+| --- | --- | --- | --- | --- | --- |
+| Multi-DAM Picker | /apps/multi-dam-picker/multi-dam-picker.html | | | | fullsize-dialog |
+
+Pages served from `*--ew-extensions-demo--jazhou-adobe.*` always call the **Stage** worker (`config.js`), and the
+worker allows those origins through its comma-list `SITE` input. Re-run the command after every picker change.
+
 ## Site config read
 
 None beyond the library row above: the page reads no other site config.

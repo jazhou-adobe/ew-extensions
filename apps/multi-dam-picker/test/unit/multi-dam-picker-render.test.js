@@ -388,8 +388,9 @@ describe('UI18: worker origin by page hostname', () => {
   it('maps hostnames to the Production or Stage worker or to none', () => {
     ['main--ew-extensions--jazhou-adobe.aem.live', 'main--ew-extensions--jazhou-adobe.aem.page', 'main--ew-extensions--jazhou-adobe.preview.da.live']
       .forEach((h) => expect(workerFor(h).base).to.equal(WORKERS.production));
-    ['my-branch--ew-extensions--jazhou-adobe.aem.live', 'localhost'].forEach((h) => expect(workerFor(h).base).to.equal(WORKERS.stage));
-    ['evil.example', 'main--ew-extensions-demo--jazhou-adobe.aem.live', 'main--ew-extensions--jazhou-adobe.aem.live.evil.example', 'localhost.evil.example', '']
+    ['my-branch--ew-extensions--jazhou-adobe.aem.live', 'localhost', 'main--ew-extensions-demo--jazhou-adobe.aem.live', 'main--ew-extensions-demo--jazhou-adobe.aem.page']
+      .forEach((h) => expect(workerFor(h).base).to.equal(WORKERS.stage));
+    ['evil.example', 'main--ew-extensions-demo2--jazhou-adobe.aem.live', 'main--ew-extensions-demo--jazhou-adobe.aem.live.evil.example', 'main--ew-extensions--jazhou-adobe.aem.live.evil.example', 'localhost.evil.example', '']
       .forEach((h) => expect(workerFor(h)).to.equal(null));
     expect(WORKERS.production).to.match(/^https:\/\/281295-ewextensions\.adobeioruntime\.net\/api\/v1\/web\/multi-dam-picker\/api$/);
     expect(WORKERS.stage).to.match(/^https:\/\/281295-ewextensions-stage\.adobeioruntime\.net\/api\/v1\/web\/multi-dam-picker\/api$/);
@@ -397,7 +398,7 @@ describe('UI18: worker origin by page hostname', () => {
 
   it('makes no worker call on a foreign host and ignores ?worker= everywhere', async () => {
     window.history.replaceState(null, '', `${window.location.pathname}?worker=https://evil.example`);
-    for (const hostname of ['evil.example', 'main--ew-extensions-demo--jazhou-adobe.aem.live']) {
+    for (const hostname of ['evil.example', 'main--ew-extensions-demo2--jazhou-adobe.aem.live']) {
       const w = worker();
       // eslint-disable-next-line no-await-in-loop
       const ui = await mount({ worker: w, hostname });
