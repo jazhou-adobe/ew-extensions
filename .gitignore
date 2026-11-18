@@ -3,3 +3,12 @@ node_modules/
 playwright-report/
 test-results/
 .DS_Store
+
+# Worker secrets and CLI state (App Builder): never commit
+.env
+.env.*
+!.env.example
+.aio
+.aio.*
+**/worker/dist/
+**/worker/.cache/

@@ -1,9 +1,11 @@
 // Repo conventions check: every extension folder under apps/ is self-contained and listed in the README.
 import {
-  existsSync, readdirSync, readFileSync, statSync,
+  existsSync, readdirSync, readFileSync, realpathSync, statSync,
 } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { analyzeConfig, parseEnv } from '../shared/worker-template/scripts/worker-config.mjs';
 
 const TYPES = {
   app: [/^#+\s.*`apps` sheet row/im],
@@ -38,6 +40,88 @@ function parseTable(readme) {
     .map(([name, folder, entry, type]) => ({
       name, folder: folder.replace(/\/$/, ''), entry, type,
     }));
+}
+
+const GITIGNORE_REQUIRED = ['.env', '.env.*', '!.env.example', '.aio'];
+const HLXIGNORE_REQUIRED = ['**/worker/', 'shared/worker-template/'];
+const WORKER_FILES = ['app.config.yaml', 'package.json', 'README.md', '.env.example'];
+const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'playwright-report', 'test-results']);
+const CONFIG_NAMES = new Set(['app.config.yaml', 'app.config.yml']);
+const isEnvFile = (name) => name === '.env' || (name.startsWith('.env.') && name !== '.env.example');
+
+function lines(file) {
+  return existsSync(file) ? readFileSync(file, 'utf8').split(/\r?\n/).map((l) => l.trim()) : [];
+}
+
+function walkRepo(dir) {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    if (e.isDirectory()) return SKIP_DIRS.has(e.name) ? [] : walkRepo(join(dir, e.name));
+    return [join(dir, e.name)];
+  });
+}
+
+/** Tracked files (git ls-files) when `root` is the top of a git repository; otherwise null. */
+function trackedFiles(root) {
+  try {
+    const top = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (realpathSync(top) !== realpathSync(root)) return null;
+    return execFileSync('git', ['ls-files'], { cwd: root, encoding: 'utf8' }).split('\n').filter(Boolean);
+  } catch {
+    return null;
+  }
+}
+
+/** Worker rules (SPEC Decision 19): App Builder app roots, secret hygiene, config location, ignore files. */
+function checkWorkers(root, errors) {
+  const gitignore = lines(join(root, '.gitignore'));
+  GITIGNORE_REQUIRED.forEach((p) => {
+    if (!gitignore.includes(p)) {
+      errors.push(`.gitignore: missing "${p}" (worker secrets and CLI state must stay untracked)`);
+    }
+  });
+  if (!gitignore.some((l) => /(^|\/)dist\/?$/.test(l))) errors.push('.gitignore: missing the aio build output (dist/)');
+  const hlxignore = lines(join(root, '.hlxignore'));
+  HLXIGNORE_REQUIRED.forEach((p) => {
+    if (!hlxignore.includes(p)) errors.push(`.hlxignore: missing "${p}" (worker sources must not reach the code bus)`);
+  });
+
+  (trackedFiles(root) || []).forEach((f) => {
+    const name = f.split('/').pop();
+    if (isEnvFile(name) || name === '.aio') errors.push(`${f}: must not be tracked (secrets / CLI credentials)`);
+  });
+
+  walkRepo(root).forEach((file) => {
+    if (!CONFIG_NAMES.has(file.split('/').pop())) return;
+    const rel = relative(root, file).split('\\').join('/');
+    const allowed = /^apps\/[^/]+\/worker\/app\.config\.ya?ml$/.test(rel)
+      || rel === 'shared/worker-template/scaffold/app.config.yaml';
+    if (!allowed) {
+      errors.push(`${rel}: app configs are only allowed in apps/<ext>/worker/ and the template scaffold`);
+    }
+  });
+
+  const appsDir = join(root, 'apps');
+  if (!existsSync(appsDir)) return;
+  readdirSync(appsDir).forEach((ext) => {
+    const dir = join(appsDir, ext, 'worker');
+    if (!existsSync(dir)) return;
+    const where = `apps/${ext}/worker`;
+    WORKER_FILES.forEach((f) => {
+      if (!existsSync(join(dir, f))) errors.push(`${where}: missing ${f}`);
+    });
+    if (!hasTests(dir)) errors.push(`${where}: missing tests (*.test.js under test/)`);
+    const configPath = ['app.config.yaml', 'app.config.yml'].map((f) => join(dir, f)).find(existsSync);
+    if (!configPath) return;
+    const { errors: configErrors, refs } = analyzeConfig(readFileSync(configPath, 'utf8'), { folderName: ext });
+    configErrors.forEach((e) => errors.push(`${where}/app.config.yaml: ${e}`));
+    const examplePath = join(dir, '.env.example');
+    const example = existsSync(examplePath) ? parseEnv(readFileSync(examplePath, 'utf8')) : {};
+    refs.forEach((name) => {
+      if (!(name in example)) errors.push(`${where}/.env.example: missing $${name} referenced by app.config.yaml`);
+    });
+  });
 }
 
 export function checkConventions(root) {
@@ -89,6 +173,7 @@ export function checkConventions(root) {
     });
   });
 
+  checkWorkers(root, errors);
   return errors;
 }
 

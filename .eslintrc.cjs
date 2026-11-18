@@ -24,9 +24,44 @@ module.exports = {
       rules: { 'import/no-extraneous-dependencies': 'off' },
     },
     {
+      // Worker code runs in Node (App Builder / I/O Runtime), not the browser.
+      files: ['shared/worker-template/**/*.{js,mjs}', 'apps/*/worker/**/*.{js,mjs}'],
+      env: { node: true, browser: false },
+      rules: {
+        'import/no-extraneous-dependencies': 'off',
+        // Each worker is its own App Builder package but deliberately imports the shared core by relative path.
+        'import/no-relative-packages': 'off',
+        'no-underscore-dangle': ['error', {
+          allow: [
+            '__ow_method', '__ow_headers', '__ow_path', '__ow_query', '__ow_body',
+            '__OW_ACTIVATION_ID', '__OW_DEADLINE',
+          ],
+        }],
+      },
+    },
+    {
+      files: [
+        'shared/worker-template/test/**/*.js',
+        'shared/worker-template/test-live/**/*.js',
+        'apps/*/worker/test/**/*.js',
+        'apps/*/test/**/*-worker.*.js',
+        'scripts/*.test.mjs',
+      ],
+      rules: {
+        'no-await-in-loop': 'off',
+        'no-unused-expressions': 'off',
+        'max-len': 'off',
+        'max-statements-per-line': 'off',
+        'object-curly-newline': 'off',
+        'object-property-newline': 'off',
+        'default-param-last': 'off',
+        'no-underscore-dangle': 'off',
+      },
+    },
+    {
       files: ['**/test/e2e/**/*.js'],
       env: { node: true },
-      rules: { 'import/no-extraneous-dependencies': 'off' },
+      rules: { 'import/no-extraneous-dependencies': 'off', 'import/no-relative-packages': 'off' },
     },
   ],
 };

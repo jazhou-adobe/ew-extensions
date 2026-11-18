@@ -1,0 +1,8 @@
+{
+  "name": "__EXT__-worker",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Backend (Adobe App Builder web action) for the __EXT__ extension.",
+  "type": "module",
+  "license": "Apache-2.0"
+}

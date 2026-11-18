@@ -22,9 +22,9 @@ apps/<name>/
 ├── README.md            what it does, registration row(s), local dev, auth
 ├── test/unit/*.test.js  WTR unit tests
 ├── test/e2e/*.spec.js   Playwright e2e tests (stubbed SDK)
-├── worker/              (ticket #2) per-extension backend worker
+├── worker/              per-extension backend: an Adobe App Builder app root (see Worker below)
 └── providers/<vendor>/  (vendor follow-up tickets) vendor-specific code, not an extension of its own
-shared/worker-template/  (ticket #2) reusable worker template; not an extension
+shared/worker-template/  reusable App Builder worker template (core, scaffold, test kit); not an extension
 test/support/            shared test harness: SDK stub (sdk-stub.js), e2e helper (e2e.js)
 scripts/                 conventions check, static dev/e2e server
 ```
@@ -71,6 +71,7 @@ npm run serve    # fallback: plain static server on port 3000 (what e2e uses)
 npm run lint     # ESLint 8 (helix config) + Stylelint 16
 npm run check    # conventions check
 npm test         # unit tests (WTR + Playwright Chromium) and conventions-check tests
+npm run test:worker  # worker template + every apps/*/worker (node:test, no login, no network)
 npm run test:e2e # Playwright e2e on port 3100 (E2E_PORT), Chromium, hermetic (stubbed SDK); test:e2e:all adds Firefox/WebKit
 ```
 
@@ -116,10 +117,16 @@ this repo and register the site in the Configuration Service. Until then
 `https://main--ew-extensions--jazhou-adobe.aem.live/...` returns 404. The DA test site `jazhou-adobe/ew-extensions-demo`
 already exists.
 
-## Worker notes (ticket #2, Adobe App Builder)
+## Worker (backend) for extensions that hold secrets
 
-Per-extension backend workers go in `apps/<name>/worker/`, built from `shared/worker-template/`. Workers must validate the
-IMS token and set CORS; secrets live in the platform store, never in the repo.
+Extensions that need a vendor credential, a CORS bypass or server-side token exchange get a backend in `apps/<name>/worker/`:
+one Adobe App Builder (I/O Runtime) raw web action built from [`shared/worker-template/`](shared/worker-template/README.md)
+(`node shared/worker-template/scripts/new-worker.mjs <name>` creates it). The template validates the caller's IMS token before
+anything else, allows only `https://da.live` and this code site's origins, keeps secrets in an untracked `.env` /
+platform-encrypted action inputs, and ships a retrying outbound proxy and a test kit. The worker folder is itself an App Builder
+app root (`app.config.yaml`, `package.json`, untracked `.env`/`.aio`). `aio` is a global CLI (11.x), run as `env -u CI aio ...`;
+deploys are manual (`aio app deploy` from the worker folder). `apps/hello-world/worker/` is the reference worker. `npm run check`
+enforces the worker rules (no tracked `.env`/`.aio`, secrets as `$NAME` references, annotations, folder-name = package name).
 
 ## Policy notes (open items)
 

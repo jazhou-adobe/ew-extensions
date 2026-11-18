@@ -1,0 +1,29 @@
+# App Builder application root for the hello-world extension's backend (one raw web action).
+# Secrets are `$NAME` references filled from the untracked .env at deploy time; everything else is a reviewable literal.
+application:
+  hooks:
+    pre-app-deploy: node ../../../shared/worker-template/scripts/pre-deploy-guard.mjs
+  runtimeManifest:
+    packages:
+      hello-world:
+        license: Apache-2.0
+        actions:
+          api:
+            function: actions/api/index.js
+            web: raw
+            runtime: nodejs:22
+            inputs:
+              ORG: jazhou-adobe
+              SITE: ew-extensions
+              IMS_ORIGIN: https://ims-na1.adobelogin.com
+              ALLOWED_IMS_CLIENT_IDS: ''
+              STATE_REGION: amer
+              ALLOWED_LOCAL_ORIGINS: $ALLOWED_LOCAL_ORIGINS
+              HELLO_SECRET: $HELLO_SECRET
+            annotations:
+              web-custom-options: true
+              require-adobe-auth: false
+              final: true
+            limits:
+              timeout: 25000
+              memory: 256

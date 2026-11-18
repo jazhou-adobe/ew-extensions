@@ -1,0 +1,8 @@
+{
+  "name": "hello-world-worker",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Backend (Adobe App Builder web action) for the hello-world extension.",
+  "type": "module",
+  "license": "Apache-2.0"
+}
