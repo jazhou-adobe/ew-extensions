@@ -23,6 +23,25 @@ afterEach(() => {
   window.history.replaceState(null, '', window.location.pathname);
 });
 
+describe('UI0: picker is named after the selected source', () => {
+  it('reads "<label> Asset Picker" in the heading and page title, and follows the source switcher', async () => {
+    const ui = await mount({ worker: worker({ providers: [provider(), provider({ id: 'other', label: 'Other DAM' })] }) });
+    expect(ui.$('h1.title').textContent).to.equal('Cloudinary Asset Picker');
+    expect(document.title).to.equal('Cloudinary Asset Picker');
+    const switcher = ui.$('select');
+    switcher.value = 'other';
+    switcher.dispatchEvent(new Event('change'));
+    await flush();
+    expect(ui.$('h1.title').textContent).to.equal('Other DAM Asset Picker');
+    expect(ui.$$('h1.title')).to.have.length(1);
+  });
+
+  it('keeps the generic name while the source list is loading or empty', async () => {
+    const ui = await mount({ worker: worker({ providers: [] }) });
+    expect(ui.$('h1.title').textContent).to.equal('Asset Picker');
+  });
+});
+
 describe('UI1: providers and first grid', () => {
   it('awaits the SDK, lists providers with the bearer token, shows the grid with no connect prompt, never exposes the token', async () => {
     const spy = [];
@@ -419,7 +438,7 @@ describe('bootstrap', () => {
     document.body.innerHTML = '<main id="app"></main>';
     const { ready } = await import('../../multi-dam-picker.js');
     await ready;
-    expect(document.getElementById('app').textContent).to.contain('Multi-DAM Picker');
+    expect(document.getElementById('app').textContent).to.contain('Asset Picker');
     fakeTimers();
   });
 });

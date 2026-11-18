@@ -1,8 +1,10 @@
-# Multi-DAM Picker (library plugin)
+# Cloudinary Asset Picker (library plugin)
 
 An Experience Workspace (EW) library plugin that lets authors **browse, search, filter and insert assets from a third-party DAM**
-while editing a page. The first DAM is **Cloudinary**; the picker shell, provider interface and backend are DAM-agnostic, so later
-DAMs (Dropbox, Bynder, Frontify) add one module and one registry line. Spec: [SPEC.md](SPEC.md) (ticket #23).
+while editing a page. Authors see it as **Cloudinary Asset Picker**: the heading reads "<DAM label> Asset Picker", taken from the
+configured DAM. The extension folder and backend keep the name `multi-dam-picker`, because the picker shell, provider interface and
+backend are DAM-agnostic: later DAMs (Dropbox, Bynder, Frontify) add one module and one registry line. Spec: [SPEC.md](SPEC.md)
+(ticket #23).
 
 - **Browse and search** (typing searches after a short pause, Enter searches at once), filter by type (images, videos, documents,
   audio), sort by newest, oldest, name or relevance, "Load more".
@@ -146,7 +148,7 @@ Copy the browser files into `ew-extensions-demo` (checked out next to this repo)
 ```sh
 npm run package:extension -- multi-dam-picker ../ew-extensions-demo
 cd ../ew-extensions-demo
-git add apps/multi-dam-picker && git commit -m "chore: update Multi-DAM Picker" && git push
+git add apps/multi-dam-picker && git commit -m "chore: update Cloudinary Asset Picker" && git push
 ```
 
 The command replaces `ew-extensions-demo/apps/multi-dam-picker/` with the browser files only (no `worker/`, tests or docs) and records
@@ -159,7 +161,7 @@ resolves against the demo site itself:
 
 | title | path | format | ref | icon | experience |
 | --- | --- | --- | --- | --- | --- |
-| Multi-DAM Picker | /apps/multi-dam-picker/multi-dam-picker.html | | | | fullsize-dialog |
+| Cloudinary Asset Picker | /apps/multi-dam-picker/multi-dam-picker.html | | | | fullsize-dialog |
 
 #### Option B: serve from this repo
 
@@ -174,9 +176,9 @@ code lives in this repo, not the demo site's repo, so the paths are absolute.
 
 | title | path | format | ref | icon | experience |
 | --- | --- | --- | --- | --- | --- |
-| Multi-DAM Picker | http://localhost:3000/apps/multi-dam-picker/multi-dam-picker.html | | local | | fullsize-dialog |
-| Multi-DAM Picker | https://BRANCH--ew-extensions--jazhou-adobe.aem.live/apps/multi-dam-picker/multi-dam-picker.html | | BRANCH | | fullsize-dialog |
-| Multi-DAM Picker | https://main--ew-extensions--jazhou-adobe.aem.live/apps/multi-dam-picker/multi-dam-picker.html | | | | fullsize-dialog |
+| Cloudinary Asset Picker | http://localhost:3000/apps/multi-dam-picker/multi-dam-picker.html | | local | | fullsize-dialog |
+| Cloudinary Asset Picker | https://BRANCH--ew-extensions--jazhou-adobe.aem.live/apps/multi-dam-picker/multi-dam-picker.html | | BRANCH | | fullsize-dialog |
+| Cloudinary Asset Picker | https://main--ew-extensions--jazhou-adobe.aem.live/apps/multi-dam-picker/multi-dam-picker.html | | | | fullsize-dialog |
 
 Replace `BRANCH` (twice) with a simple branch name (no `/`), and keep that row only while you test the branch. The `local` row
 works without Code Sync: run `npm start` and open the editor with `?ref=local`. `experience` may also be blank (inline); the page
@@ -267,7 +269,8 @@ npm run test:picker:live   # LV1-LV6 (deployed backend) and LC1-LC3 (real Cloudi
 ### Manual test in EW
 
 1. Open any page of `ew-extensions-demo` in the EW editor. Add `?ref=local` only when testing the `local` row with `npm start`.
-2. Open the library and choose **Multi-DAM Picker**. Expected: a grid of assets from `samples/` with thumbnails.
+2. Open the library and choose **Cloudinary Asset Picker**. Expected: a heading "Cloudinary Asset Picker" and a grid of assets from
+   `samples/` with thumbnails.
 3. Type a keyword and check the results narrow. Change the type filter and the sort order.
 4. Open an image, choose a rendition, check the alt text, and click **Insert**. Expected: the image appears in the document, and the
    library closes.

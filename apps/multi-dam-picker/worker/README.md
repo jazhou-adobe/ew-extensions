@@ -1,6 +1,6 @@
 # multi-dam-picker worker
 
-Backend for the Multi-DAM Picker: one App Builder raw web action `multi-dam-picker/api` built on the
+Backend for the Cloudinary Asset Picker (extension `multi-dam-picker`): one App Builder raw web action `multi-dam-picker/api` built on the
 [worker template](../../../shared/worker-template/README.md). It is the **shell**: provider registry and interface, routes,
 validation, result cache, error mapping, output URL policy. Vendor code lives in `../providers/<vendor>/worker/` and is registered
 in `providers.js`. Extension docs, settings and deploy steps: [../README.md](../README.md).
