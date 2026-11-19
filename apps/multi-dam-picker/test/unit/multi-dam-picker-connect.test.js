@@ -210,7 +210,7 @@ describe('UO10/UO11: several sources, accessibility', () => {
     switcher.value = 'dropbox';
     switcher.dispatchEvent(new Event('change'));
     await flush();
-    expect(ui.$('h1.title').textContent).to.equal('Dropbox Asset Picker');
+    expect(ui.$('h1')).to.equal(null);
     expect(button(ui, 'Connect to Dropbox')).to.not.equal(undefined);
     switcher.value = 'cloudinary';
     switcher.dispatchEvent(new Event('change'));

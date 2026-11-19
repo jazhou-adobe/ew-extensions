@@ -109,6 +109,23 @@ test('E2E1: the grid loads with no connect prompt; the fake saw the default expr
   expect(req.json.sort_by).toBeUndefined();
 });
 
+test('E2E0: ?source=cloudinary pins the source (no dropdown, no heading); the open detail sits beside the grid', async ({ page }) => {
+  await page.setViewportSize({ width: 1490, height: 930 });
+  const worker = await startWorker();
+  await open(page, worker, { query: '?source=cloudinary' });
+  await expect(grid(page).first()).toBeVisible();
+  await expect(page.locator('.source')).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(0);
+  await grid(page).first().click();
+  const detail = page.locator('.detail');
+  await expect(detail).toBeVisible();
+  const g = await page.locator('.grid').boundingBox();
+  const d = await detail.boundingBox();
+  expect(d.x).toBeGreaterThanOrEqual(g.x + g.width);
+  expect(d.y).toBeLessThan(g.y + 50);
+  expect(g.width).toBeGreaterThan(d.width);
+});
+
 test('E2E2: search, type filter and "Load more" (appends, stops at hasMore:false)', async ({ page }) => {
   const worker = await startWorker({ cloudOptions: { resources: withWords(60) } });
   await open(page, worker);

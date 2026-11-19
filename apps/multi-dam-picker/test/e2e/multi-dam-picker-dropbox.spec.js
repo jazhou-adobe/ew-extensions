@@ -82,9 +82,16 @@ async function open(page, context, worker, { token } = {}) {
     delete headers.host;
     delete headers.cookie;
     if (toOauth && jar.size) headers.cookie = [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
-    const res = await fetch(target, {
-      method: req.method(), headers, redirect: 'manual',
-    });
+    let res;
+    try {
+      res = await fetch(target, {
+        method: req.method(), headers, redirect: 'manual',
+      });
+    } catch {
+      // The emulator closed while a background call (session poll, navigation away) was in flight: end it quietly.
+      await route.abort().catch(() => {});
+      return;
+    }
     res.headers.getSetCookie().forEach((line) => {
       const [pair] = line.split(';');
       const [name, ...value] = pair.split('=');
@@ -130,7 +137,7 @@ const grid = (page) => page.locator('button.item');
 test('EO1/EO2: Connect opens a real pop-up, the sign-in completes there and the picker shows the grid without a reload', async ({ page, context }) => {
   const worker = await startWorkers();
   const ui = await open(page, context, worker);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dropbox Asset Picker');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Connect to Dropbox' })).toBeVisible();
   await expect(grid(page)).toHaveCount(0);
   await connect(page);
@@ -150,6 +157,7 @@ test('EO1/EO2: Connect opens a real pop-up, the sign-in completes there and the 
 });
 
 test('EO3: select -> exactly one link is created -> edit alt -> Insert sends one <img src alt> with the raw=1 URL, then closes the library', async ({ page, context }) => {
+  await page.setViewportSize({ width: 1490, height: 930 });
   const worker = await startWorkers();
   await open(page, context, worker);
   await connect(page);
@@ -158,6 +166,12 @@ test('EO3: select -> exactly one link is created -> edit alt -> Insert sends one
   await expect(grid(page)).toHaveCount(1);
   await grid(page).first().click();
   await expect(page.getByRole('heading', { name: 'Beach Boat.jpg' })).toBeVisible();
+  // layout: the connect panel spans the top; the grid and the detail pane sit side by side below it
+  const [panel, g, d] = await Promise.all(['.connect', '.grid', '.detail'].map((s) => page.locator(s).boundingBox()));
+  expect(g.y).toBeGreaterThan(panel.y + panel.height - 1);
+  expect(d.y).toBeGreaterThan(panel.y + panel.height - 1);
+  expect(d.x).toBeGreaterThanOrEqual(g.x + g.width);
+  expect(g.x).toBeLessThan(panel.x + 20);
   await expect(page.getByText('Prefilled from the file name.')).toBeVisible();
   await page.getByLabel('Alt text', { exact: true }).fill('A boat on a beach');
   expect(worker.dbx.requests.filter((r) => r.path.endsWith('create_shared_link_with_settings'))).toHaveLength(1);
@@ -263,7 +277,7 @@ test('EO9: bare and foreign-key calls are 401 with readable CORS; ?worker= is ig
   expect(OAUTH_BASE).toContain(STAGE_ORIGIN);
   await page.goto(`${PAGE}?worker=https://evil.example`);
   expect((await page.evaluate(() => window.location.search))).toContain('evil.example');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dropbox Asset Picker');
+  await expect(page.locator('.connect')).toBeVisible();
   expect(ui.pageRequests.some((u) => u.startsWith('https://evil.example'))).toBe(false);
 });
 

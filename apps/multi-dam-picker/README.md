@@ -1,11 +1,13 @@
 # Multi-DAM Asset Picker (library plugin)
 
 An Experience Workspace (EW) library plugin that lets authors **browse, search, filter and insert assets from a third-party DAM**
-while editing a page. Authors see it as **Cloudinary Asset Picker** or **Dropbox Asset Picker**: the heading reads "<DAM label> Asset
-Picker", taken from the selected DAM. The extension folder and backend keep the name `multi-dam-picker`, because the picker shell,
-provider interface and backend are DAM-agnostic: a DAM is one module and one registry line. Cloudinary (one shared credential, ticket
-#23, spec [SPEC.md](SPEC.md)) and Dropbox (each author connects their own account, ticket #25, spec
-[providers/dropbox/SPEC.md](providers/dropbox/SPEC.md)) are built; Bynder and Frontify follow.
+while editing a page. One page serves every DAM: add **one `library` row per DAM**, each with its own title and a `?source=<id>`
+parameter on the path (see [One library row per DAM](#one-library-row-per-dam)), so authors see e.g. **Cloudinary Asset Picker** and
+**Dropbox Asset Picker** as separate extensions. EW shows the row title on the dialog; the page renders no heading of its own. The
+extension folder and backend keep the name `multi-dam-picker`, because the picker shell, provider interface and backend are
+DAM-agnostic: a DAM is one module and one registry line. Cloudinary (one shared credential, ticket #23, spec [SPEC.md](SPEC.md)) and
+Dropbox (each author connects their own account, ticket #25, spec [providers/dropbox/SPEC.md](providers/dropbox/SPEC.md)) are
+built; Bynder and Frontify follow.
 
 - **Browse and search** (typing searches after a short pause, Enter searches at once), filter by type (images, videos, documents,
   audio), sort by newest, oldest, name or relevance, "Load more".
@@ -223,7 +225,7 @@ Copy the browser files into `ew-extensions-demo` (checked out next to this repo)
 ```sh
 npm run package:extension -- multi-dam-picker ../ew-extensions-demo
 cd ../ew-extensions-demo
-git add apps/multi-dam-picker && git commit -m "chore: update Cloudinary Asset Picker" && git push
+git add apps/multi-dam-picker && git commit -m "chore: update Asset Picker" && git push
 ```
 
 The command replaces `ew-extensions-demo/apps/multi-dam-picker/` with the browser files only (no `worker/`, tests or docs) and records
@@ -231,12 +233,24 @@ the source commit in `.vendored.json`. It fails if a page module imports a file 
 picker change.** Pages served from `*--ew-extensions-demo--jazhou-adobe.*` always call the **Stage** backend, and the backend allows
 those origins through its comma-list `SITE` input.
 
-Then add this row to the `library` tab of `https://da.live/config#/jazhou-adobe/ew-extensions-demo/`. The path is relative, so it
-resolves against the demo site itself:
+Then add one row per DAM to the `library` tab of `https://da.live/config#/jazhou-adobe/ew-extensions-demo/`. The path is relative, so
+it resolves against the demo site itself:
 
 | title | path | format | ref | icon | experience |
 | --- | --- | --- | --- | --- | --- |
-| Cloudinary Asset Picker | /apps/multi-dam-picker/multi-dam-picker.html | | | | fullsize-dialog |
+| Cloudinary Asset Picker | /apps/multi-dam-picker/multi-dam-picker.html?source=cloudinary | | | | fullsize-dialog |
+| Dropbox Asset Picker | /apps/multi-dam-picker/multi-dam-picker.html?source=dropbox | | | | fullsize-dialog |
+
+#### One library row per DAM
+
+- **`?source=<id>`** on the row's `path` pins the picker to that DAM and hides the *Source* dropdown. The ids are the provider ids:
+  `cloudinary`, `dropbox`.
+- **Title:** any text you like; EW shows it in the library list and on the dialog. Titles must differ: EW keeps only the first row
+  for a title (case-insensitive, spaces count as `-`).
+- **Without `?source=`** the picker offers every DAM the backend has configured, with a *Source* dropdown when there is more than one.
+- An unknown or malformed `source` shows "The source set for this picker is not configured" and calls no DAM.
+- Keep commas out of the path: EW splits a library `path` on commas.
+- The `source` parameter only chooses among DAMs the backend already serves; it cannot point the page at another backend.
 
 #### Option B: serve from this repo
 
@@ -251,13 +265,14 @@ code lives in this repo, not the demo site's repo, so the paths are absolute.
 
 | title | path | format | ref | icon | experience |
 | --- | --- | --- | --- | --- | --- |
-| Cloudinary Asset Picker | http://localhost:3000/apps/multi-dam-picker/multi-dam-picker.html | | local | | fullsize-dialog |
-| Cloudinary Asset Picker | https://BRANCH--ew-extensions--jazhou-adobe.aem.live/apps/multi-dam-picker/multi-dam-picker.html | | BRANCH | | fullsize-dialog |
-| Cloudinary Asset Picker | https://main--ew-extensions--jazhou-adobe.aem.live/apps/multi-dam-picker/multi-dam-picker.html | | | | fullsize-dialog |
+| Cloudinary Asset Picker | http://localhost:3000/apps/multi-dam-picker/multi-dam-picker.html?source=cloudinary | | local | | fullsize-dialog |
+| Cloudinary Asset Picker | https://BRANCH--ew-extensions--jazhou-adobe.aem.live/apps/multi-dam-picker/multi-dam-picker.html?source=cloudinary | | BRANCH | | fullsize-dialog |
+| Cloudinary Asset Picker | https://main--ew-extensions--jazhou-adobe.aem.live/apps/multi-dam-picker/multi-dam-picker.html?source=cloudinary | | | | fullsize-dialog |
 
-Replace `BRANCH` (twice) with a simple branch name (no `/`), and keep that row only while you test the branch. The `local` row
-works without Code Sync: run `npm start` and open the editor with `?ref=local`. `experience` may also be blank (inline); the page
-works in both. `fullsize-dialog` is known from the da-live source, not from the public docs.
+Replace `BRANCH` (twice) with a simple branch name (no `/`), and keep that row only while you test the branch. Add the same three rows
+with `?source=dropbox` and a different title (e.g. **Dropbox Asset Picker**) for Dropbox. The `local` row works without Code Sync:
+run `npm start` and open the editor with `?ref=local`. `experience` may also be blank (inline); the page works in both.
+`fullsize-dialog` is known from the da-live source, not from the public docs.
 
 ### Site config read
 
@@ -362,8 +377,8 @@ npm run test:picker:live   # LV1-LV6 (deployed backend) and LC1-LC3 (real Cloudi
 ### Manual test in EW
 
 1. Open any page of `ew-extensions-demo` in the EW editor. Add `?ref=local` only when testing the `local` row with `npm start`.
-2. Open the library and choose **Cloudinary Asset Picker**. Expected: a heading "Cloudinary Asset Picker" and a grid of assets from
-   `samples/` with thumbnails.
+2. Open the library and choose **Cloudinary Asset Picker** (the `?source=cloudinary` row). Expected: the dialog titled with the row
+   title, no *Source* dropdown, and a grid of assets from `samples/` with thumbnails.
 3. Type a keyword and check the results narrow. Change the type filter and the sort order.
 4. Open an image, choose a rendition, check the alt text, and click **Insert**. Expected: the image appears in the document, and the
    library closes.
@@ -376,8 +391,8 @@ npm run test:picker:live   # LV1-LV6 (deployed backend) and LC1-LC3 (real Cloudi
 Needs the two-step deploy and the Dropbox app above. Use your own Dropbox account (or one added under **Development users**).
 
 1. Open a page of `ew-extensions-demo` in the EW editor (add `?ref=local` with `npm start` to test the `local` row, or `?ref=<branch>` for
-   a branch row), open the library and choose the picker's row (the one `library` row serves every DAM; its title is yours, e.g. **Cloudinary Asset Picker**). With both DAMs configured pick **Dropbox** in the *Source* list; the heading then reads "Dropbox Asset Picker".
-2. Expect "Dropbox Asset Picker" and **Connect to Dropbox**. Click it: a sign-in window opens (allow pop-ups for the page if the browser
+   a branch row), open the library and choose **Dropbox Asset Picker** (the `?source=dropbox` row).
+2. Expect no *Source* dropdown and **Connect to Dropbox**. Click it: a sign-in window opens (allow pop-ups for the page if the browser
    blocks it; the page then shows a link). Sign in to Dropbox and click **Allow**. The window says "You are connected"; the picker shows
    "Connected as <your name>" and your files **without a reload**.
 3. Search a file name; filter by type; open an image. Expect one rendition "Original (size)" and the alt text from the file name (or the
@@ -399,7 +414,9 @@ Needs the two-step deploy and the Dropbox app above. Use your own Dropbox accoun
 | `401` from the backend in EW | Missing or expired IMS token. Reload the editor. If `ALLOWED_IMS_CLIENT_IDS` is set, check it matches the token's `client_id`. |
 | `502 upstream_unavailable` | Cloudinary rejected the credentials (wrong key/secret, or a rotated secret not redeployed) or is down. |
 | `429` with `Retry-After` | Admin API quota nearly spent (500/hour on Free). Wait for the hour to reset. |
-| Dropbox is not in the *Source* list | `DROPBOX_CLIENT_ID`/`DROPBOX_CLIENT_SECRET` or one of `OAUTH_PUBLIC_BASE_URL`, `TOKEN_ENC_KEY`, `OAUTH_STATE_KEY` is blank in the deployed `.env`. `env -u CI aio app logs -a multi-dam-picker/api -l 20` shows `oauth_host_unconfigured`. |
+| Dropbox is not configured or not in the *Source* list | `DROPBOX_CLIENT_ID`/`DROPBOX_CLIENT_SECRET` or one of `OAUTH_PUBLIC_BASE_URL`, `TOKEN_ENC_KEY`, `OAUTH_STATE_KEY` is blank or invalid in the deployed `.env` (`TOKEN_ENC_KEY` and `OAUTH_STATE_KEY` must each be 32 random bytes in base64, 44 characters). `env -u CI aio app logs -a multi-dam-picker/api -l 20` shows `oauth_host_unconfigured` or `config_invalid`. |
+| "The source set for this picker is not configured" | The row's `?source=` names a DAM the backend does not serve (typo, or its settings are blank). Check the id (`cloudinary`, `dropbox`) and the backend `.env`. |
+| Grid and detail pane overlap or stack in a narrow column | An old page is cached: reload the editor. The detail pane sits beside the grid when the dialog is at least 720 px wide, below it otherwise. |
 | The sign-in window says "Could not connect" | The sign-in ticket (60 s) or state (10 min) expired, the window was opened in another browser than the one that clicked Connect, or Dropbox refused: check the redirect URI is exactly `<OAUTH_PUBLIC_BASE_URL>/dropbox/callback`, all five scopes are ticked and submitted, and the account is a development user. Try **Connect** again. |
 | Dropbox shows "redirect_uri" or "invalid_scope" in the sign-in window | The redirect URI is not registered on the app's Settings tab, or a scope is not enabled on its Permissions tab. Fix it in the App Console and Connect again. |
 | "Your browser blocked the sign-in window" | Allow pop-ups for the page, or use the link the panel shows. The sign-in must run in the browser that clicked Connect. |

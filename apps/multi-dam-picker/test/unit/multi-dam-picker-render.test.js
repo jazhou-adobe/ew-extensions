@@ -23,22 +23,42 @@ afterEach(() => {
   window.history.replaceState(null, '', window.location.pathname);
 });
 
-describe('UI0: picker is named after the selected source', () => {
-  it('reads "<label> Asset Picker" in the heading and page title, and follows the source switcher', async () => {
-    const ui = await mount({ worker: worker({ providers: [provider(), provider({ id: 'other', label: 'Other DAM' })] }) });
-    expect(ui.$('h1.title').textContent).to.equal('Cloudinary Asset Picker');
-    expect(document.title).to.equal('Cloudinary Asset Picker');
-    const switcher = ui.$('select');
-    switcher.value = 'other';
-    switcher.dispatchEvent(new Event('change'));
-    await flush();
-    expect(ui.$('h1.title').textContent).to.equal('Other DAM Asset Picker');
-    expect(ui.$$('h1.title')).to.have.length(1);
+describe('UI0: one source per library row', () => {
+  const two = [provider(), provider({ id: 'other', label: 'Other DAM' })];
+
+  it('without ?source= offers every source in a dropdown and renders no heading (EW shows the row title)', async () => {
+    const ui = await mount({ worker: worker({ providers: two }), search: '' });
+    expect(ui.$$('.source select option').map((o) => o.value)).to.deep.equal(['cloudinary', 'other']);
+    expect(ui.$('h1')).to.equal(null);
   });
 
-  it('keeps the generic name while the source list is loading or empty', async () => {
-    const ui = await mount({ worker: worker({ providers: [] }) });
-    expect(ui.$('h1.title').textContent).to.equal('Asset Picker');
+  it('?source=<id> pins that source: no dropdown, only its assets are requested', async () => {
+    const w = worker({ providers: two });
+    const ui = await mount({ worker: w, search: '?source=Other' });
+    expect(ui.$('.source')).to.equal(null);
+    expect(ui.$$('button.item')).to.have.length(2);
+    expect(w.searches().every((c) => c.path === '/dam/other/assets')).to.equal(true);
+  });
+
+  it('an unknown or malformed ?source= says it is not configured and requests no assets', async () => {
+    for (const search of ['?source=nope', '?source=../cloudinary', '?source=%3Cscript%3E']) {
+      const w = worker({ providers: two });
+      // eslint-disable-next-line no-await-in-loop
+      const ui = await mount({ worker: w, search });
+      expect(ui.root.textContent, search).to.contain('not configured');
+      expect(w.searches(), search).to.have.length(0);
+      expect(ui.$('.source'), search).to.equal(null);
+      ui.root.remove();
+    }
+  });
+
+  it('puts the grid and an open detail pane in one results container', async () => {
+    const ui = await mount({ worker: worker() });
+    ui.$$('button.item')[0].click();
+    await flush();
+    const results = ui.$('.results');
+    expect(results.querySelector('.grid')).to.not.equal(null);
+    expect(results.querySelector('.detail-host > .detail')).to.not.equal(null);
   });
 });
 
@@ -439,7 +459,7 @@ describe('bootstrap', () => {
     document.body.innerHTML = '<main id="app"></main>';
     const { ready } = await import('../../multi-dam-picker.js');
     await ready;
-    expect(document.getElementById('app').textContent).to.contain('Asset Picker');
+    expect(document.getElementById('app').children.length).to.be.greaterThan(0);
     fakeTimers();
   });
 });
